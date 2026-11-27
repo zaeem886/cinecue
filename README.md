@@ -1,5 +1,40 @@
 # CineCue
 
+## Interactive demo
+
+A local Streamlit interface is available in `app.py`. It uses the notebook outputs
+in `results/`, with `data/processed/` as a fallback.
+From this directory, use a project virtual environment and run:
+
+```powershell
+python -m pip install -r requirements-app.txt
+python -m streamlit run app.py
+```
+
+Open the local URL printed by Streamlit (normally `http://localhost:8501`).
+Initial fitting may take several minutes. Choose favorites under **My taste**
+or select a MovieLens user. Adjust the list length or enable **Discover less popular movies**.
+Each card displays a title, genres, predicted rating, and an explanation. Toggle
+**Show explanations** to compare the same list with and without reasons. This
+supports a survey demonstration but does not collect survey responses.
+
+The models are cached in memory across UI interactions. They fit train plus
+validation using settings in `rating_summary.json` and `ranking_summary.json`;
+the demo never reads test feedback. Refreshing data files invalidates the cache.
+The UI uses the final ranker, without UTC or recency ranking adjustments, and
+does not claim that those experiments improved recommendations. Streamlit is an
+optional dependency; `requirements-app.txt` installs only the app's NumPy, pandas,
+and Streamlit dependencies. Install `requirements.txt` separately when running
+notebooks. The notebook requirements and existing model code are unchanged.
+Run `python -m unittest discover -s tests` to check the models and demo adapter.
+
+For a UI smoke test, launch the app, check that missing data produces setup
+instructions, then with processed data present load the models, switch users,
+toggle discovery, and hide/show explanations. The title list should stay identical
+when only the explanation toggle changes, and contain no movies in that user's
+train/validation history. Colab is suitable for generating the data; download its
+processed outputs into `data/processed/` before launching the local demo.
+
 CineCue is a context-aware and explainable movie recommendation project. Phase 1
 prepares MovieLens 1M through cleaning, exploratory data analysis (EDA), and
 preprocessing. Phase 2 trains and evaluates rating and ranking models, re-ranks
