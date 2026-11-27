@@ -1,0 +1,193 @@
+{
+  "validation_rows": 100020,
+  "selected": {
+    "user_reg": 10.0,
+    "item_reg": 2.0
+  },
+  "grid": [
+    {
+      "user_reg": 2,
+      "item_reg": 2,
+      "frozen RMSE": 0.9680594581326589,
+      "online RMSE": 0.9154851274828409
+    },
+    {
+      "user_reg": 2,
+      "item_reg": 5,
+      "frozen RMSE": 0.968226737058535,
+      "online RMSE": 0.9156788800893846
+    },
+    {
+      "user_reg": 2,
+      "item_reg": 10,
+      "frozen RMSE": 0.96945568442191,
+      "online RMSE": 0.9163363762190884
+    },
+    {
+      "user_reg": 2,
+      "item_reg": 25,
+      "frozen RMSE": 0.9744140906702827,
+      "online RMSE": 0.9189014379169966
+    },
+    {
+      "user_reg": 5,
+      "item_reg": 2,
+      "frozen RMSE": 0.9678613643126015,
+      "online RMSE": 0.9141272205776053
+    },
+    {
+      "user_reg": 5,
+      "item_reg": 5,
+      "frozen RMSE": 0.9680461187738195,
+      "online RMSE": 0.9142836431302425
+    },
+    {
+      "user_reg": 5,
+      "item_reg": 10,
+      "frozen RMSE": 0.9692150244309583,
+      "online RMSE": 0.9149083889581856
+    },
+    {
+      "user_reg": 5,
+      "item_reg": 25,
+      "frozen RMSE": 0.9739106820098934,
+      "online RMSE": 0.9174271327403729
+    },
+    {
+      "user_reg": 10,
+      "item_reg": 2,
+      "frozen RMSE": 0.9677838740097947,
+      "online RMSE": 0.9140695503373439
+    },
+    {
+      "user_reg": 10,
+      "item_reg": 5,
+      "frozen RMSE": 0.9679868283550707,
+      "online RMSE": 0.9142005783078786
+    },
+    {
+      "user_reg": 10,
+      "item_reg": 10,
+      "frozen RMSE": 0.9690822799866973,
+      "online RMSE": 0.9147980438498856
+    },
+    {
+      "user_reg": 10,
+      "item_reg": 25,
+      "frozen RMSE": 0.9734638588790328,
+      "online RMSE": 0.9173076687627724
+    },
+    {
+      "user_reg": 25,
+      "item_reg": 2,
+      "frozen RMSE": 0.9679271701159989,
+      "online RMSE": 0.916443387298164
+    },
+    {
+      "user_reg": 25,
+      "item_reg": 5,
+      "frozen RMSE": 0.9681290615228061,
+      "online RMSE": 0.9165374968783978
+    },
+    {
+      "user_reg": 25,
+      "item_reg": 10,
+      "frozen RMSE": 0.9690741890935001,
+      "online RMSE": 0.9171094957911141
+    },
+    {
+      "user_reg": 25,
+      "item_reg": 25,
+      "frozen RMSE": 0.9729034735973798,
+      "online RMSE": 0.9196229079555432
+    }
+  ],
+  "validation": {
+    "global mean": {
+      "RMSE": 1.119100614661078,
+      "MAE": 0.936586978002366
+    },
+    "bias (frozen)": {
+      "RMSE": 0.9677838740097947,
+      "MAE": 0.7693946730457816
+    },
+    "bias (online)": {
+      "RMSE": 0.9140695503373439,
+      "MAE": 0.7211081574311626
+    }
+  },
+  "by_user_history": [
+    {
+      "segment": "0 (new)",
+      "rows": 76176,
+      "global mean": 1.121941064608497,
+      "bias (frozen)": 0.9854831859152359,
+      "bias (online)": 0.9216896869597843
+    },
+    {
+      "segment": "1-19",
+      "rows": 2725,
+      "global mean": 1.0425652933998633,
+      "bias (frozen)": 0.9239568118523522,
+      "bias (online)": 0.8935148521910709
+    },
+    {
+      "segment": "20-99",
+      "rows": 5390,
+      "global mean": 1.057104080796927,
+      "bias (frozen)": 0.9006868744743556,
+      "bias (online)": 0.8804769819868922
+    },
+    {
+      "segment": "100-299",
+      "rows": 7644,
+      "global mean": 1.0580572300391515,
+      "bias (frozen)": 0.8679702036337268,
+      "bias (online)": 0.8620432213963757
+    },
+    {
+      "segment": "300+",
+      "rows": 8085,
+      "global mean": 1.209863225063216,
+      "bias (frozen)": 0.9463820309651659,
+      "bias (online)": 0.9185851892529486
+    }
+  ],
+  "by_movie_history": [
+    {
+      "segment": "0 (new)",
+      "rows": 17,
+      "global mean": 1.4647014497808275,
+      "bias (frozen)": 1.3838524989136034,
+      "bias (online)": 1.3056638685502449
+    },
+    {
+      "segment": "1-19",
+      "rows": 875,
+      "global mean": 1.404044327894028,
+      "bias (frozen)": 1.228823495392075,
+      "bias (online)": 1.1665365648450228
+    },
+    {
+      "segment": "20-99",
+      "rows": 7362,
+      "global mean": 1.3098547140792764,
+      "bias (frozen)": 1.039435057035841,
+      "bias (online)": 0.9735732960901032
+    },
+    {
+      "segment": "100-499",
+      "rows": 40292,
+      "global mean": 1.1558537211095705,
+      "bias (frozen)": 0.980526261304269,
+      "bias (online)": 0.9195025232479619
+    },
+    {
+      "segment": "500+",
+      "rows": 51474,
+      "global mean": 1.0526889661892003,
+      "bias (frozen)": 0.9415586531265752,
+      "bias (online)": 0.8957926358100162
+    }
+  ]
+}

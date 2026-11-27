@@ -1,0 +1,312 @@
+{
+  "bias": {
+    "user_reg": 10.0,
+    "item_reg": 2.0
+  },
+  "mf": {
+    "factors": 64,
+    "reg": 0.08,
+    "n_iter": 10,
+    "seed": 0
+  },
+  "utc_context": {
+    "kept": false,
+    "validation_online_gain": 0.00034811490307751214,
+    "grid": [
+      {
+        "context reg": 25,
+        "frozen RMSE": 0.9601759978160181,
+        "online RMSE": 0.8696531412639263,
+        "mean |offset|": 0.043747205619888284
+      },
+      {
+        "context reg": 100,
+        "frozen RMSE": 0.9598991375503053,
+        "online RMSE": 0.8690986700845554,
+        "mean |offset|": 0.0284532397293779
+      },
+      {
+        "context reg": 400,
+        "frozen RMSE": 0.9601330001572516,
+        "online RMSE": 0.8690381656113947,
+        "mean |offset|": 0.013730758870140285
+      }
+    ]
+  },
+  "session_context": {
+    "kept": true,
+    "gap_seconds": 3600,
+    "reg": 60.0,
+    "validation_online_gain": 0.003552036743634801,
+    "grid": [
+      {
+        "session reg": 10,
+        "online RMSE": 0.8693496621415318,
+        "users with history": 0.8126507247025587,
+        "new users": 0.8863521007455768
+      },
+      {
+        "session reg": 30,
+        "online RMSE": 0.8663649828206225,
+        "users with history": 0.8127712691441078,
+        "new users": 0.8824718635898068
+      },
+      {
+        "session reg": 60,
+        "online RMSE": 0.8658342437708374,
+        "users with history": 0.8146451889910423,
+        "new users": 0.8812462208076044
+      },
+      {
+        "session reg": 100,
+        "online RMSE": 0.8659840413127227,
+        "users with history": 0.8166393466814782,
+        "new users": 0.8808616724612002
+      },
+      {
+        "session reg": 200,
+        "online RMSE": 0.8666404899706353,
+        "users with history": 0.8196620234415684,
+        "new users": 0.880830584127665
+      }
+    ]
+  },
+  "test_bootstrap": {
+    "MF + session (online) vs MF (online)": {
+      "difference": -0.010061072767274082,
+      "ci_low": -0.013094553498780687,
+      "ci_high": -0.007776534559731871
+    },
+    "MF (online) vs bias (online)": {
+      "difference": -0.042952784509850295,
+      "ci_low": -0.04695673786072879,
+      "ci_high": -0.039275272674331334
+    },
+    "MF (online) vs MF (frozen)": {
+      "difference": -0.04252406941780562,
+      "ci_low": -0.05158399722512955,
+      "ci_high": -0.03459615370159796
+    }
+  },
+  "mf_grid": [
+    {
+      "factors": 16,
+      "reg": 0.05,
+      "train RMSE": 0.7325567840692111,
+      "frozen RMSE": 0.9641739286566878,
+      "online RMSE": 0.8778125626705401
+    },
+    {
+      "factors": 16,
+      "reg": 0.08,
+      "train RMSE": 0.774496735584751,
+      "frozen RMSE": 0.9613123758846208,
+      "online RMSE": 0.8727224099061991
+    },
+    {
+      "factors": 16,
+      "reg": 0.12,
+      "train RMSE": 0.8358586660856879,
+      "frozen RMSE": 0.9628106957143926,
+      "online RMSE": 0.8846768831233243
+    },
+    {
+      "factors": 32,
+      "reg": 0.05,
+      "train RMSE": 0.6710457335558254,
+      "frozen RMSE": 0.9648821834175368,
+      "online RMSE": 0.8796730509583783
+    },
+    {
+      "factors": 32,
+      "reg": 0.08,
+      "train RMSE": 0.7456294702135801,
+      "frozen RMSE": 0.9609925727517181,
+      "online RMSE": 0.8714354168861134
+    },
+    {
+      "factors": 32,
+      "reg": 0.12,
+      "train RMSE": 0.8334223683897567,
+      "frozen RMSE": 0.9629027744682823,
+      "online RMSE": 0.884319198882465
+    },
+    {
+      "factors": 64,
+      "reg": 0.05,
+      "train RMSE": 0.6024852979191793,
+      "frozen RMSE": 0.9651082928806691,
+      "online RMSE": 0.8769018322082321
+    },
+    {
+      "factors": 64,
+      "reg": 0.08,
+      "train RMSE": 0.722252135534914,
+      "frozen RMSE": 0.9608168448635792,
+      "online RMSE": 0.8693862805144722
+    },
+    {
+      "factors": 64,
+      "reg": 0.12,
+      "train RMSE": 0.8317048540662779,
+      "frozen RMSE": 0.9627978497498622,
+      "online RMSE": 0.883997107083714
+    }
+  ],
+  "validation": {
+    "global mean": {
+      "RMSE": 1.119100614661078,
+      "MAE": 0.936586978002366
+    },
+    "bias (frozen)": {
+      "RMSE": 0.9677838740097947,
+      "MAE": 0.7693946730457816
+    },
+    "bias (online)": {
+      "RMSE": 0.9140695503373439,
+      "MAE": 0.7211081574311626
+    },
+    "MF (frozen)": {
+      "RMSE": 0.9608168448635792,
+      "MAE": 0.7710749474070483
+    },
+    "MF (online)": {
+      "RMSE": 0.8693862805144722,
+      "MAE": 0.6846793563650506
+    },
+    "MF + session (online)": {
+      "RMSE": 0.8658342437708374,
+      "MAE": 0.6793843560257389
+    }
+  },
+  "test": {
+    "global mean": {
+      "RMSE": 1.0892938459924713,
+      "MAE": 0.9024768930128293
+    },
+    "bias (frozen)": {
+      "RMSE": 0.9197785550603971,
+      "MAE": 0.7204767337318686
+    },
+    "bias (online)": {
+      "RMSE": 0.8937128702763307,
+      "MAE": 0.7006694014922128
+    },
+    "MF (frozen)": {
+      "RMSE": 0.893284155184286,
+      "MAE": 0.6996506267764632
+    },
+    "MF (online)": {
+      "RMSE": 0.8507600857664805,
+      "MAE": 0.6670449972096288
+    },
+    "MF + session (online)": {
+      "RMSE": 0.8406990129992066,
+      "MAE": 0.6589649408450232
+    }
+  },
+  "test_by_user_history": [
+    {
+      "segment": "0 (new)",
+      "rows": 4209,
+      "global mean": 1.099896012829174,
+      "bias (frozen)": 0.9834112257488034,
+      "bias (online)": 0.9373722478652556,
+      "MF (frozen)": 0.9815071040840001,
+      "MF (online)": 0.8811258513790128,
+      "MF + session (online)": 0.8786034687301735
+    },
+    {
+      "segment": "1-19",
+      "rows": 10022,
+      "global mean": 1.1092906270534313,
+      "bias (frozen)": 0.9522627280400576,
+      "bias (online)": 0.9118087234924956,
+      "MF (frozen)": 0.9776385982854198,
+      "MF (online)": 0.8776575432275543,
+      "MF + session (online)": 0.8736971838282811
+    },
+    {
+      "segment": "20-99",
+      "rows": 22238,
+      "global mean": 1.0579331503088567,
+      "bias (frozen)": 0.9076343976208107,
+      "bias (online)": 0.8777255548833305,
+      "MF (frozen)": 0.8879833044054747,
+      "MF (online)": 0.83915799400858,
+      "MF + session (online)": 0.8328118353322372
+    },
+    {
+      "segment": "100-299",
+      "rows": 32666,
+      "global mean": 1.090927528496256,
+      "bias (frozen)": 0.925369716337485,
+      "bias (online)": 0.8949999096895385,
+      "MF (frozen)": 0.8874073780170348,
+      "MF (online)": 0.8497127742307817,
+      "MF + session (online)": 0.8363683574619095
+    },
+    {
+      "segment": "300+",
+      "rows": 30886,
+      "global mean": 1.1017482352156345,
+      "bias (frozen)": 0.902676054515848,
+      "bias (online)": 0.8917301528259514,
+      "MF (frozen)": 0.8614364400025019,
+      "MF (online)": 0.8470779755758812,
+      "MF + session (online)": 0.8346987999723672
+    }
+  ],
+  "test_by_movie_history": [
+    {
+      "segment": "0 (new)",
+      "rows": 90,
+      "global mean": 0.9793770131686752,
+      "bias (frozen)": 0.9860696938545125,
+      "bias (online)": 0.9857915390780776,
+      "MF (frozen)": 1.0008237658625814,
+      "MF (online)": 0.9876646209597812,
+      "MF + session (online)": 0.9861446060243566
+    },
+    {
+      "segment": "1-19",
+      "rows": 1390,
+      "global mean": 1.1300392188110722,
+      "bias (frozen)": 0.9911925911184885,
+      "bias (online)": 0.9714666915727715,
+      "MF (frozen)": 0.9938869851348299,
+      "MF (online)": 0.962920242271856,
+      "MF + session (online)": 0.9545985156475404
+    },
+    {
+      "segment": "20-99",
+      "rows": 8634,
+      "global mean": 1.2066626247575423,
+      "bias (frozen)": 0.9483061552399388,
+      "bias (online)": 0.9251807652659143,
+      "MF (frozen)": 0.937333828253246,
+      "MF (online)": 0.8964401933218297,
+      "MF + session (online)": 0.8847684536093421
+    },
+    {
+      "segment": "100-499",
+      "rows": 41995,
+      "global mean": 1.1285623988751767,
+      "bias (frozen)": 0.9175951170078724,
+      "bias (online)": 0.8909955268632349,
+      "MF (frozen)": 0.8953438610364785,
+      "MF (online)": 0.8519104165282739,
+      "MF + session (online)": 0.8410370180898364
+    },
+    {
+      "segment": "500+",
+      "rows": 47912,
+      "global mean": 1.029304517880887,
+      "bias (frozen)": 0.9141711575827414,
+      "bias (online)": 0.887764940776716,
+      "MF (frozen)": 0.8799462949616701,
+      "MF (online)": 0.8374479005432097,
+      "MF + session (online)": 0.828337019099216
+    }
+  ]
+}

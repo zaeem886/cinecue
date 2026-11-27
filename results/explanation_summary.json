@@ -1,0 +1,30 @@
+{
+  "users": 200,
+  "recommendations": 2000,
+  "max_reconstruction_error": 6.439293542825908e-15,
+  "median_history": 156.0,
+  "median_named_share": 0.04006906607569663,
+  "median_top3_share": 0.10810048348162178,
+  "named_liked_share": 1.0,
+  "named_is_largest_share": 0.926,
+  "deletion": [
+    {
+      "condition": "named movie",
+      "mean_score_change": -0.08738502765042834,
+      "share_left_top10": 0.1555,
+      "cases": 2000
+    },
+    {
+      "condition": "random",
+      "mean_score_change": 0.0011803858971912416,
+      "share_left_top10": 0.0315,
+      "cases": 2000
+    },
+    {
+      "condition": "most negative",
+      "mean_score_change": 0.035301172496703025,
+      "share_left_top10": 0.007,
+      "cases": 2000
+    }
+  ]
+}

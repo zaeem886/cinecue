@@ -1,0 +1,85 @@
+{
+  "total_rows": 1000209,
+  "train_cutoff_unix": 975768738,
+  "validation_cutoff_unix": 978133367,
+  "splits": [
+    {
+      "split": "train",
+      "rows": 800168,
+      "percentage": 80.0000799832835,
+      "start_utc": "2000-04-25 23:05:32+00:00",
+      "end_utc": "2000-12-02 14:52:18+00:00",
+      "users": 5400,
+      "movies": 3662
+    },
+    {
+      "split": "validation",
+      "rows": 100020,
+      "percentage": 9.99991001880607,
+      "start_utc": "2000-12-02 14:52:28+00:00",
+      "end_utc": "2000-12-29 23:42:47+00:00",
+      "users": 1134,
+      "movies": 3305
+    },
+    {
+      "split": "test",
+      "rows": 100021,
+      "percentage": 10.000009997910437,
+      "start_utc": "2000-12-29 23:43:34+00:00",
+      "end_utc": "2003-02-28 17:49:50+00:00",
+      "users": 1209,
+      "movies": 3407
+    }
+  ],
+  "cold_start": [
+    {
+      "split": "validation",
+      "reference": "train",
+      "unseen_users": 611,
+      "unseen_movies": 16,
+      "rows_unseen_user": 76176,
+      "rows_unseen_movie": 17,
+      "rows_either_unseen": 76180
+    },
+    {
+      "split": "test",
+      "reference": "train",
+      "unseen_users": 200,
+      "unseen_movies": 33,
+      "rows_unseen_user": 19326,
+      "rows_unseen_movie": 98,
+      "rows_either_unseen": 19413
+    },
+    {
+      "split": "test",
+      "reference": "train + validation",
+      "unseen_users": 29,
+      "unseen_movies": 28,
+      "rows_unseen_user": 4209,
+      "rows_unseen_movie": 90,
+      "rows_either_unseen": 4298
+    }
+  ],
+  "genre_columns": [
+    "genre_action",
+    "genre_adventure",
+    "genre_animation",
+    "genre_childrens",
+    "genre_comedy",
+    "genre_crime",
+    "genre_documentary",
+    "genre_drama",
+    "genre_fantasy",
+    "genre_film_noir",
+    "genre_horror",
+    "genre_musical",
+    "genre_mystery",
+    "genre_romance",
+    "genre_sci_fi",
+    "genre_thriller",
+    "genre_war",
+    "genre_western"
+  ],
+  "missing_release_year_movies": 0,
+  "missing_release_year_interactions": 0
+}

@@ -4,7 +4,11 @@ __pycache__/
 .jupyter/
 .ipython/
 .mplconfig/
-/results/
+/results/*
+!/results/*.json
+!/results/*.csv.gz
+!/results/.gitkeep
+/artifacts/
 .env
 .env.*
 !.env.example

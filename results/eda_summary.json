@@ -1,0 +1,124 @@
+{
+  "ratings": 1000209,
+  "users": 6040,
+  "rated_movies": 3706,
+  "catalog_movies": 3883,
+  "unique_pairs": 1000209,
+  "user_median": 96.0,
+  "movie_median": 123.5,
+  "user_min": 20,
+  "user_max": 2314,
+  "movie_min": 1,
+  "movie_max": 3428,
+  "sparsity_pct": 95.53163743776871,
+  "catalog_sparsity_pct": 95.73532020200125,
+  "top_10pct_movie_count": 371,
+  "top_10pct_share_pct": 44.45410909119994,
+  "top_movie_share_pct": 0.3427283697707179,
+  "mean_rating": 3.581564453029317,
+  "rating_4_or_5_pct": 57.516079139459855,
+  "rating_frequency": {
+    "1": {
+      "count": 56174,
+      "percentage": 5.616226208722377
+    },
+    "2": {
+      "count": 107557,
+      "percentage": 10.75345252842156
+    },
+    "3": {
+      "count": 261197,
+      "percentage": 26.11424212339621
+    },
+    "4": {
+      "count": 348971,
+      "percentage": 34.889808030121706
+    },
+    "5": {
+      "count": 226310,
+      "percentage": 22.62627110933815
+    }
+  },
+  "most_rated_title": "American Beauty (1999)",
+  "genre_stats": {
+    "Horror": {
+      "rating_count": 76386,
+      "mean_rating": 3.215013222318226
+    },
+    "Children's": {
+      "rating_count": 72186,
+      "mean_rating": 3.422034743579087
+    },
+    "Fantasy": {
+      "rating_count": 36301,
+      "mean_rating": 3.447370595851354
+    },
+    "Sci-Fi": {
+      "rating_count": 157294,
+      "mean_rating": 3.466521291339784
+    },
+    "Adventure": {
+      "rating_count": 133953,
+      "mean_rating": 3.477256948332624
+    },
+    "Action": {
+      "rating_count": 257457,
+      "mean_rating": 3.4911849357368414
+    },
+    "Comedy": {
+      "rating_count": 356580,
+      "mean_rating": 3.522098827752538
+    },
+    "Thriller": {
+      "rating_count": 189680,
+      "mean_rating": 3.5704660480809784
+    },
+    "Romance": {
+      "rating_count": 147523,
+      "mean_rating": 3.607464598740535
+    },
+    "Western": {
+      "rating_count": 20683,
+      "mean_rating": 3.6377701493980563
+    },
+    "Musical": {
+      "rating_count": 41533,
+      "mean_rating": 3.6655189849035708
+    },
+    "Mystery": {
+      "rating_count": 40178,
+      "mean_rating": 3.6681019463387923
+    },
+    "Animation": {
+      "rating_count": 43293,
+      "mean_rating": 3.684868223500335
+    },
+    "Crime": {
+      "rating_count": 79541,
+      "mean_rating": 3.708678543141273
+    },
+    "Drama": {
+      "rating_count": 354529,
+      "mean_rating": 3.766332232342065
+    },
+    "War": {
+      "rating_count": 68527,
+      "mean_rating": 3.893326717935996
+    },
+    "Documentary": {
+      "rating_count": 7910,
+      "mean_rating": 3.933122629582807
+    },
+    "Film-Noir": {
+      "rating_count": 18261,
+      "mean_rating": 4.075187558184108
+    }
+  },
+  "largest_catalog_genre": "Drama",
+  "peak_hour_utc": 21,
+  "peak_hour_count": 65491,
+  "peak_weekday_utc": "Monday",
+  "peak_weekday_count": 173931,
+  "weekend_pct": 25.361699404824392,
+  "hours_with_ratings": 24
+}

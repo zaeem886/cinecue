@@ -1,0 +1,30 @@
+{
+  "raw_ratings": 1000209,
+  "raw_movies": 3883,
+  "clean_ratings": 1000209,
+  "users": 6040,
+  "rated_movies": 3706,
+  "catalog_movies": 3883,
+  "first_rating_utc": "2000-04-25 23:05:32+00:00",
+  "last_rating_utc": "2003-02-28 17:49:50+00:00",
+  "checks": {
+    "invalid_user_id": 0,
+    "invalid_movie_id": 0,
+    "invalid_rating": 0,
+    "invalid_timestamp": 0,
+    "invalid_rating_rows_total": 0,
+    "invalid_metadata_id": 0,
+    "empty_title": 0,
+    "invalid_or_empty_genres": 0,
+    "duplicate_metadata_rows_removed": 0,
+    "conflicting_movie_keys": 0,
+    "exact_rating_duplicates_removed": 0,
+    "same_time_conflict_groups": 0,
+    "same_time_conflict_rows": 0,
+    "same_time_conflict_rows_removed": 0,
+    "valid_repeated_pairs_retained": 0,
+    "repeat_events_beyond_first_retained": 0,
+    "ratings_without_metadata": 0,
+    "unrated_catalog_movies": 177
+  }
+}

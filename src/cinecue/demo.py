@@ -5,14 +5,14 @@ import json
 import numpy as np
 import pandas as pd
 
-from .data import load_movies
+from .data import load_movies, table_path
 from .explain import blend_contributions
 from .models import EASE, MatrixFactorization
 from .ranking import blend, popularity_scale, rerank_by_popularity, top_k
 
 
 def fit_demo(processed):
-    history = pd.concat([pd.read_csv(processed / f'{s}.csv', usecols=['user_id', 'movie_id', 'rating'])
+    history = pd.concat([pd.read_csv(table_path(processed, f'{s}.csv'), usecols=['user_id', 'movie_id', 'rating'])
                          for s in ('train', 'validation')], ignore_index=True)
     ranking = json.loads((processed / 'ranking_summary.json').read_text())['selected']
     rating = json.loads((processed / 'rating_summary.json').read_text())['mf']

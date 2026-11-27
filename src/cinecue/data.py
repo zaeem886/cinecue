@@ -5,6 +5,11 @@ import pandas as pd
 SPLITS = ("train", "validation", "test")
 
 
+def table_path(folder, name):
+    path = folder / name
+    return path if path.is_file() else folder / (name + ".gz")
+
+
 def read_interactions(path):
     """Read a split or interaction table: UTC times and a nullable release year."""
     frame = pd.read_csv(path, dtype={"release_year": "Int64"})
@@ -20,8 +25,8 @@ def load_splits(processed):
 
 def load_movies(processed):
     """Catalog titles joined to the fixed genre flags, one row per movie."""
-    movies = pd.read_csv(processed / "movies_clean.csv")
-    features = pd.read_csv(processed / "movie_features.csv", dtype={"release_year": "Int64"})
+    movies = pd.read_csv(table_path(processed, "movies_clean.csv"))
+    features = pd.read_csv(table_path(processed, "movie_features.csv"), dtype={"release_year": "Int64"})
     catalog = movies[["movie_id", "title", "genres"]].merge(features, on="movie_id", how="inner",
                                                            validate="one_to_one")
     assert len(catalog) == len(movies) == len(features)

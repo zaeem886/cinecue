@@ -1,63 +1,137 @@
 # CineCue
 
-## Interactive demo
+CineCue is a movie recommendation website and a reproducible data science project.
+It combines EASE and matrix factorization, explains recommendations using a
+user's rating history, and evaluates rating accuracy, ranking relevance, and
+popularity exposure on MovieLens 1M.
 
-**Windows quick start:** install Python 3.11–3.14, clone the repository, and
-double-click `start-cinecue.cmd`. It prepares the virtual environment and opens
-Streamlit. The first run needs internet to install dependencies and fetch the
-official MovieLens 1M archive. CineCue verifies the archive, caches it locally,
-and fits the models using ratings through the validation cutoff. No notebook
-runs or manual file transfers are needed.
+## Run the website
 
-A local Streamlit interface is available in `app.py`. It uses the notebook outputs
-in `results/`, with `data/processed/` as a fallback.
-From this directory, use a project virtual environment and run:
+Install Python 3.11?3.14, clone this repository, and enter its directory.
+
+**Windows:** double-click `start-cinecue.cmd`. The launcher creates `.venv`,
+installs `requirements-app.txt`, and starts Streamlit. Internet is required for
+the dependency installation.
+
+Or run these commands in PowerShell:
 
 ```powershell
-python -m pip install -r requirements-app.txt
-python -m streamlit run app.py
+python -m venv .venv
+.\.venv\Scripts\python.exe -m pip install -r requirements-app.txt
+.\.venv\Scripts\python.exe -m streamlit run app.py
 ```
 
-Open the local URL printed by Streamlit (normally `http://localhost:8501`).
-Initial fitting may take several minutes. Choose favorites under **My taste**
-or select a MovieLens user. Adjust the list length or enable **Discover less popular movies**.
-Each card displays a title, genres, predicted rating, and an explanation. Toggle
-**Show explanations** to compare the same list with and without reasons. This
-supports a survey demonstration but does not collect survey responses.
+**Linux/macOS:**
 
-The models are cached in memory across UI interactions. They fit train plus
-validation using settings in `rating_summary.json` and `ranking_summary.json`;
-the demo never reads test feedback. Refreshing data files invalidates the cache.
-The UI uses the final ranker, without UTC or recency ranking adjustments, and
-does not claim that those experiments improved recommendations. Streamlit is an
-optional dependency; `requirements-app.txt` installs only the app's NumPy, pandas,
-and Streamlit dependencies. Install `requirements.txt` separately when running
-notebooks. The notebook requirements and existing model code are unchanged.
-Run `python -m unittest discover -s tests` to check the models and demo adapter.
+```bash
+python3 -m venv .venv
+.venv/bin/python -m pip install -r requirements-app.txt
+.venv/bin/python -m streamlit run app.py
+```
 
-For a UI smoke test, launch the app, select your favorite movies, switch users,
-toggle discovery, and hide/show explanations. The title list should stay identical
-when only the explanation toggle changes, and contain no movies in that user's
-train/validation history.
+Open the local URL printed in the terminal, normally http://localhost:8501.
+The first launch fits and saves the selected models and can take several minutes.
+Later launches load the saved models.
 
-CineCue is a context-aware and explainable movie recommendation project. Phase 1
-prepares MovieLens 1M through cleaning, exploratory data analysis (EDA), and
-preprocessing. Phase 2 trains and evaluates rating and ranking models, re-ranks
-lists to reduce popularity bias, tests the available context, and explains each
-recommendation. The code and notes are written to be read one notebook at a time.
+## What is included
 
-The problem is to recommend relevant movies while accounting for limited context
-and explaining suggestions. Phase 1 establishes rating quality, sparse histories,
-and popularity bias; [Phase 2](#phase-2-models-ranking-and-explanations) builds on
-those findings.
+- `results/*.csv.gz` contains compressed notebook tables, including the
+  chronological training, validation, and test splits. The app reads the compressed
+  files directly. No manual downloads or notebook execution are required to use it.
+- `results/*.json` contains the evaluation summaries and selected model settings.
+- `notebooks/` contains the cleaning, analysis, modeling, ranking, and explanation work.
+- `app.py` contains the Streamlit interface. `src/cinecue/` contains the model and
+  recommendation logic.
+- `artifacts/recommender.pkl` is generated locally. It holds fitted models,
+  the catalog, user histories, popularity counts, and ranking settings.
+  It is excluded from Git along with virtual environments and secrets.
+
+Uncompressed CSVs are retained locally when available. The table loader prefers
+those files and otherwise uses their `.csv.gz` equivalents.
+
+## How the website uses the model
+
+1. If a saved model artifact exists, the website loads it without fitting models.
+2. Otherwise, it reads the included results and fits EASE and matrix factorization
+   once on train plus validation using the notebook-selected settings.
+3. It saves the fitted bundle atomically to `artifacts/recommender.pkl` and reuses
+   it across future server restarts. Streamlit also caches the bundle in memory.
+4. If both processed results locations are absent, the automatic setup downloads
+   the official MovieLens archive, verifies its SHA-256, and uses the documented
+   validation cutoff and selected settings.
+
+The saved artifact contains data needed for inference, so later launches do not
+need the results CSVs. The test split is reserved for evaluation and is never
+loaded by the recommendation service.
+
+The notebook-trained Python objects were not exported during the original runs.
+The persisted website artifact is a fit using the selected settings and existing
+train/validation data. To intentionally rebuild it after an experiment, run:
+
+```powershell
+.\.venv\Scripts\python.exe scripts/save_models.py
+```
+
+Restart Streamlit after rebuilding. Changes to results files do not automatically
+replace an existing saved artifact. Only load pickle artifacts generated on a
+trusted machine, because unpickling can execute Python code.
+
+## Recommendation behavior
+
+EASE learns which movies appear together in rating histories. Matrix factorization
+learns rating patterns from users and movies. The final ranker combines
+standardized EASE and MF scores with weights of 0.25 and 0.75 respectively.
+
+With no favorites selected, visitors see popular movies. Selecting a favorite
+counts as a five-star rating and folds that history into the fitted models to
+generate a personalized list. Selecting a MovieLens profile uses that user's
+train/validation history instead. Already rated or selected titles are excluded,
+and eligible movies must have at least 20 history ratings.
+
+The displayed predicted stars come from MF. The combined ranking score determines
+list order. **Discover less popular films** applies the selected popularity penalty
+to the top candidates. Explanations name a liked movie with a positive score
+contribution when available and report shared genres. The final ranker excludes
+the UTC and recency adjustments tested in the notebooks.
+
+## Website features
+
+- **Discover** generates personalized picks and expandable explanations.
+- **Movie library** provides title/year search, genre filters, and pagination.
+- **Watchlist** saves picks during the browser session and exports them as CSV.
+  Closing or resetting a session can clear the list, so export it to keep a copy.
+- **Project results** shows the included test metrics and a ranking comparison chart.
+- **Dark mode** switches the interface theme and retains the selection during navigation.
+
+The explanation toggle changes presentation only. It can support a survey
+demonstration. Survey responses are not collected by the current website.
+
+## Checks and troubleshooting
+
+Run the existing model and adapter tests with:
+
+```powershell
+.\.venv\Scripts\python.exe -m unittest discover -s tests
+```
+
+For full experiment reproduction, follow the Phase 1 and Phase 2 notebook commands
+below. Those commands generate fresh files in `data/processed/`. The website
+prefers a complete `results/` directory, so select the appropriate outputs before
+deliberately rebuilding a saved model.
+
+If an import error appears after updating source files, stop Streamlit with
+Ctrl+C and restart it. If packages fail to install, check the final pip error and
+confirm the command uses the virtual environment's Python. A fresh clone needs
+time and enough memory for the initial EASE/MF fit. Subsequent launches reuse
+the saved artifact.
 
 ## Dataset
 
 Use the official [MovieLens 1M dataset from GroupLens](https://grouplens.org/datasets/movielens/1m/).
 Read the [dataset README and usage terms](https://files.grouplens.org/datasets/movielens/ml-1m-README.txt)
 before use. Research use requires acknowledgement; redistribution and commercial
-use require separate permission. This project does not redistribute the archive,
-raw files, or generated row-level data.
+use require separate permission. This repository includes compressed processed tables in results/. The original
+archive is fetched from GroupLens only when needed by the automatic setup.
 
 Dataset citation: F. Maxwell Harper and Joseph A. Konstan (2015),
 *The MovieLens Datasets: History and Context*, ACM TiiS 5(4), Article 19.
