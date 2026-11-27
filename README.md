@@ -260,7 +260,8 @@ NumPy and pandas only.
 ### Protocol
 
 - Every model is fitted on `train.csv` and tuned on `validation.csv`. Settings are then
-  fixed, models are refitted on train + validation, and `test.csv` is scored **once**.
+  fixed, models are refitted on train + validation, and `test.csv` is scored. Test
+  differences carry 95% paired bootstrap intervals over users (2,000 draws).
 - Rating models are scored two ways. **Frozen** profiles stop at the training cutoff.
   **Online** profiles also absorb the same user's ratings at strictly earlier timestamps
   in the scored split, while movie parameters stay fixed; this mirrors a live service.
@@ -269,9 +270,14 @@ NumPy and pandas only.
   movie the user rates 4–5 stars in the next period. Movies with fewer than 20 history
   ratings are never recommended. Users new at the cutoff get the popularity list and are
   reported separately.
-- Decision rules were set before results were seen: context is kept only if it lowers
-  online validation RMSE by ≥ 0.002; the re-ranking weight is the largest that keeps
-  ≥ 95% of validation NDCG@10.
+- Decision rules were set before results were seen: a context feature is kept only if it
+  lowers online validation RMSE by ≥ 0.002; the re-ranking weight is the largest that
+  keeps ≥ 95% of validation NDCG@10.
+- **Revision:** session context and recency weighting were added in a second round,
+  selected on validation, and the test split was scored again. Recency was then left out
+  of the final ranker because it lowered test NDCG@10 reliably. That one decision used
+  the test split; the final ranker's settings and test result are the same as in the
+  first round.
 
 ### Rating prediction (notebooks 4 and 5)
 
@@ -279,14 +285,21 @@ NumPy and pandas only.
 | --- | ---: | ---: | ---: |
 | Global mean | 1.089 | 1.089 | 0.903 |
 | Bias model (user + movie biases) | 0.920 | 0.894 | 0.701 |
-| Matrix factorization (64 factors, ALS) | 0.893 | **0.851** | **0.667** |
+| Matrix factorization (64 factors, ALS) | 0.893 | 0.851 | 0.667 |
+| **MF + rating-session context** | – | **0.841** | **0.659** |
 
-- MF beats the bias model on both splits. The online protocol matters most for users
-  who were new at the cutoff (76% of validation ratings); for them, MF error falls by
-  0.10 stars on test.
-- **Context:** user × weekend and movie × six-hour UTC offsets lower online validation
-  RMSE by only 0.0003, below the 0.002 threshold, so final models do not use context.
-  UTC submission time is a weak proxy for a user's situation.
+- MF beats the bias model on both splits (test: −0.043 RMSE, 95% interval −0.047 to
+  −0.039). The online protocol matters most for users who were new at the cutoff (76%
+  of validation ratings); for them, MF error falls by 0.10 stars on test.
+- **Rating-session context (kept).** A rating session is a rating-session proxy:
+  consecutive ratings by one user with no gap over one hour (validation has 2,115, with
+  a median of 15 ratings). Each rating gets the shrunken mean error of the user's
+  strictly earlier ratings in the same session, so a user rating above their profile
+  today is predicted higher. It lowers online validation RMSE by 0.0036 (0.013 for users
+  with a training history) and test RMSE by 0.010 (−0.013 to −0.008).
+- **UTC context (not kept).** User × weekend and movie × six-hour UTC offsets lower
+  online validation RMSE by only 0.0003, below the threshold. UTC submission time is a
+  weak proxy for a user's situation.
 
 ### Top-10 recommendation (notebook 6)
 
@@ -303,10 +316,16 @@ Test split, 1,158 users known at the cutoff:
 
 - Ranking by predicted stars performs poorly: rating accuracy does not translate into
   good top-N lists. EASE (Steck, 2019) learns from which movies are rated together and
-  edges out popularity; blending it with MF beats both parts.
+  edges out popularity; blending it with MF beats both parts. Blend − popularity:
+  +0.057 NDCG@10 (+0.047 to +0.066); blend − EASE: +0.035 (+0.026 to +0.043).
 - Re-ranking the blend's top 100 by score − w · popularity raises long-tail exposure
-  from 3% to 18% and coverage from 8% to 13%. It kept 96.5% of NDCG@10 on validation but
-  91.4% on test, so the exposure cost was larger over the long test period.
+  from 3% to 18% and coverage from 8% to 13%, at a reliable cost of −0.022 NDCG@10
+  (−0.026 to −0.018). It kept 96.5% of NDCG@10 on validation but 91.4% on test.
+- **Recency context (tested, not used).** Weighting each rated movie by
+  0.5^(age / 3 days) in EASE raised validation NDCG@10 from 0.150 to 0.162, but lowered
+  test NDCG@10 by 0.015 (−0.023 to −0.006). Scoring the same lists on the first 7, 28,
+  90 and 365 test days shows +0.020 at 7 days (borderline) shrinking to a loss over the
+  full two years: recency predicts what a user rates next, not over a long horizon.
 - The 29 test users new at the cutoff receive popularity lists (NDCG@10 0.459).
 
 ### Explanations (notebook 7)
@@ -327,14 +346,18 @@ whether re-ranking moved the movie up. On 2,000 test recommendations for 200 use
 
 - Relevance is inferred from later ratings. Unrated movies are unknown, not disliked,
   so ranking metrics are conservative and favor movies people tend to rate.
-- One chronological split is used; no confidence intervals are reported. The test
-  period spans two years, so absolute values are not comparable with random splits.
+- One chronological split is used. Bootstrap intervals cover sampling noise over users,
+  not variation across different cutoffs. The test period spans two years, so absolute
+  values are not comparable with random splits.
+- The validation window (four weeks) is much shorter than the test window (two years),
+  which is why recency looked better on validation than it was on test.
 - Explanations describe the model's computation, not users' motives. Their usefulness
   to people would need a user study.
 - `scripts/verify_phase2.py` checks model selection against the saved grids, the
   pre-set decision rules, test-result orderings, explanation exactness and deletion
-  results, and executed notebook outputs. `tests/` holds synthetic unit tests for the
-  models, online updates, ranking metrics, and explanations.
+  results, the bootstrap intervals, and executed notebook outputs. `tests/` holds 23
+  synthetic unit tests for the models, online updates, session offsets, recency weights,
+  the bootstrap, ranking metrics, and explanations.
 
 ## Repository layout
 

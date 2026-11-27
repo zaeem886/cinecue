@@ -8,6 +8,35 @@ import numpy as np
 import pandas as pd
 
 
+def recency_weights(timestamps, now, half_life_days):
+    """0.5 ** (age / half-life) for each rating; None means every rating counts fully.
+
+    Only ages relative to each other matter for EASE and the per-user blend, because a
+    user's scores are rescaled by their own z-score.
+    """
+    timestamps = np.asarray(timestamps, dtype=float)
+    if half_life_days is None:
+        return np.ones(len(timestamps))
+    age_days = (now - timestamps) / 86400.0
+    assert (age_days >= 0).all(), "History must not contain ratings after the ranking time."
+    return 0.5 ** (age_days / half_life_days)
+
+
+def paired_bootstrap(a, b, statistic=np.mean, n_resamples=2000, seed=0):
+    """Difference statistic(a) - statistic(b) with a 95% percentile interval.
+
+    a and b are per-unit values (for example per-user NDCG) for the same units, resampled
+    together so that both models are always compared on the same users.
+    """
+    a, b = np.asarray(a, dtype=float), np.asarray(b, dtype=float)
+    assert a.shape == b.shape
+    rng = np.random.default_rng(seed)
+    picks = rng.integers(0, len(a), size=(n_resamples, len(a)))
+    draws = np.array([statistic(a[p]) - statistic(b[p]) for p in picks])
+    low, high = np.percentile(draws, [2.5, 97.5])
+    return {"difference": float(statistic(a) - statistic(b)), "ci_low": float(low), "ci_high": float(high)}
+
+
 def standardize(scores):
     """Per-row z-scores, so models on different scales can be blended."""
     return (scores - scores.mean(axis=1, keepdims=True)) / scores.std(axis=1, keepdims=True)
