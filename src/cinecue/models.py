@@ -248,6 +248,35 @@ def online_predict(model, history, events):
     return np.clip(aligned, RATING_MIN, RATING_MAX)
 
 
+def session_offsets(events, predictions, gap_seconds=3600, reg=60.0):
+    """Rating-session context: the shrunken mean error of the user's earlier ratings this session.
+
+    A rating session is a rating-session proxy, not a viewing session: consecutive ratings
+    by one user with no gap longer than `gap_seconds`. Within a session, each event gets
+    sum(rating - prediction) / (count + reg) over the user's strictly earlier events in
+    that session, so a user who is rating above their profile today is predicted higher.
+    Events sharing a timestamp never inform each other, and the first event of a session
+    gets 0. `predictions` must be aligned with `events` (for example from online_predict).
+    """
+    order = np.lexsort((events.source_row.to_numpy(), events.timestamp.to_numpy(), events.user_id.to_numpy()))
+    users = events.user_id.to_numpy()[order]
+    stamps = events.timestamp.to_numpy()[order]
+    errors = (events.rating.to_numpy(dtype=float) - np.asarray(predictions, dtype=float))[order]
+    starts = np.r_[True, (users[1:] != users[:-1]) | (np.diff(stamps) > gap_seconds)]
+    blocks = np.split(np.arange(len(order)), np.flatnonzero(starts[1:] | (np.diff(stamps) != 0)) + 1)
+    offsets = np.zeros(len(order))
+    total = count = 0.0
+    for block in blocks:
+        if starts[block[0]]:
+            total = count = 0.0
+        offsets[block] = total / (count + reg) if count else 0.0
+        total += errors[block].sum()
+        count += len(block)
+    aligned = np.empty(len(order))
+    aligned[order] = offsets
+    return aligned
+
+
 class EASE:
     """EASE item-to-item model for top-N ranking (Steck, 2019).
 
@@ -268,11 +297,15 @@ class EASE:
         np.fill_diagonal(self.weights, 0.0)
         return self
 
-    def history_matrix(self, rows, movie_positions, n_rows):
-        """0/1 matrix with one row per user; unknown movies (-1) are skipped."""
+    def history_matrix(self, rows, movie_positions, n_rows, weights=None):
+        """One row per user: 1 (or `weights`) for each rated movie; unknown movies (-1) are skipped.
+
+        Weights let recent ratings count more at scoring time. Training always uses 0/1.
+        """
         known = movie_positions >= 0
+        values = np.ones(len(movie_positions)) if weights is None else np.asarray(weights, dtype=float)
         X = np.zeros((n_rows, len(self.movies)))
-        X[np.asarray(rows)[known], movie_positions[known]] = 1.0
+        X[np.asarray(rows)[known], movie_positions[known]] = values[known]
         return X
 
     def score(self, history):

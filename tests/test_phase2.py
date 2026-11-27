@@ -11,9 +11,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from cinecue.explain import blend_contributions, contributions, personal_score  # noqa: E402
 from cinecue.models import (EASE, BiasModel, ContextOffsets, MatrixFactorization,  # noqa: E402
-                            online_predict, rmse)
-from cinecue.ranking import (accuracy_metrics, beyond_accuracy, blend, popularity_scale,  # noqa: E402
-                             rerank_by_popularity, top_k)
+                            online_predict, rmse, session_offsets)
+from cinecue.ranking import (accuracy_metrics, beyond_accuracy, blend, paired_bootstrap,  # noqa: E402
+                             popularity_scale, recency_weights, rerank_by_popularity, top_k)
 
 
 def low_rank_ratings(n_users=60, n_items=40, rank=3, density=0.5, seed=1):
@@ -107,6 +107,25 @@ class OnlinePredictionTests(unittest.TestCase):
                                        online_predict(model, self.history, self.events)[shuffled.index])
 
 
+class SessionOffsetTests(unittest.TestCase):
+    def setUp(self):
+        # User 1: a session at t=0, 10, 10, 20, then a new session after a long gap.
+        self.events = pd.DataFrame({"user_id": [1, 1, 1, 1, 1, 2], "timestamp": [0, 10, 10, 20, 9000, 5],
+                                    "rating": [5.0, 4.0, 2.0, 3.0, 4.0, 5.0], "source_row": np.arange(6)})
+        self.predictions = np.full(6, 3.0)
+
+    def test_offsets_use_only_strictly_earlier_ratings_in_the_session(self):
+        offsets = session_offsets(self.events, self.predictions, gap_seconds=100, reg=0.0)
+        np.testing.assert_allclose(offsets, [0.0, 2.0, 2.0, (2 + 1 - 1) / 3, 0.0, 0.0])
+
+    def test_shrinkage_and_row_order(self):
+        offsets = session_offsets(self.events, self.predictions, gap_seconds=100, reg=1.0)
+        self.assertAlmostEqual(offsets[1], 2.0 / 2.0)
+        shuffled = self.events.sample(frac=1, random_state=0)
+        np.testing.assert_allclose(session_offsets(shuffled, self.predictions[shuffled.index], 100, 1.0),
+                                   offsets[shuffled.index])
+
+
 class ExplanationTests(unittest.TestCase):
     def test_contributions_sum_to_the_personal_score(self):
         users, items, ratings = low_rank_ratings()
@@ -132,6 +151,21 @@ class ExplanationTests(unittest.TestCase):
         ease_scores = ease.score(ease.history_matrix(np.zeros(len(history), int), history, 1))
         mf_scores = mf.score_items(mf.fold_in(history, stars))[None, :]
         np.testing.assert_allclose(constant + appeal + terms.sum(axis=1), blend(ease_scores, mf_scores, 0.4)[0],
+                                   atol=1e-9)
+
+
+    def test_weighted_blend_contributions_rebuild_the_blended_score(self):
+        users, items, ratings = low_rank_ratings()
+        mf = MatrixFactorization(factors=3, n_iter=5).fit(users, items, ratings)
+        ease = EASE(reg=5.0).fit(users, items)
+        rows = users == users[9]
+        history, stars = mf.movies.encode(items[rows]), ratings[rows]
+        weights = np.linspace(0.1, 1.0, len(history))
+        targets = np.arange(len(mf.movies))
+        terms, appeal, constant = blend_contributions(ease, mf, 0.6, history, stars, targets, weights)
+        ease_scores = ease.score(ease.history_matrix(np.zeros(len(history), int), history, 1, weights))
+        mf_scores = mf.score_items(mf.fold_in(history, stars))[None, :]
+        np.testing.assert_allclose(constant + appeal + terms.sum(axis=1), blend(ease_scores, mf_scores, 0.6)[0],
                                    atol=1e-9)
 
 
@@ -180,6 +214,23 @@ class RankingTests(unittest.TestCase):
         self.assertAlmostEqual(metrics.recall, 1 / 2)
         self.assertAlmostEqual(metrics.ndcg, (1 / np.log2(3)) / (1 + 1 / np.log2(3)))
         self.assertEqual(metrics.hit, 1.0)
+
+    def test_recency_weights_halve_every_half_life(self):
+        day = 86400
+        np.testing.assert_allclose(recency_weights([10 * day, 8 * day, 6 * day], 10 * day, 2), [1, 0.5, 0.25])
+        np.testing.assert_allclose(recency_weights([1, 2], 5, None), [1, 1])
+        with self.assertRaises(AssertionError):
+            recency_weights([11 * day], 10 * day, 2)
+
+    def test_paired_bootstrap_brackets_the_difference(self):
+        rng = np.random.default_rng(4)
+        a = rng.random(300)
+        result = paired_bootstrap(a + 0.1, a, n_resamples=200)
+        self.assertAlmostEqual(result["difference"], 0.1)
+        self.assertAlmostEqual(result["ci_low"], 0.1)  # a constant paired shift has no spread
+        noisy = paired_bootstrap(a, rng.random(300), n_resamples=500)
+        self.assertLess(noisy["ci_low"], noisy["difference"])
+        self.assertGreater(noisy["ci_high"], noisy["difference"])
 
     def test_beyond_accuracy(self):
         ranked = np.array([[0, 1], [0, 2]])

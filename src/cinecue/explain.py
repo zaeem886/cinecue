@@ -25,24 +25,27 @@ def personal_score(model, user_vector, target_positions):
     return model.item_aug[target_positions] @ user_vector
 
 
-def blend_contributions(ease, mf, alpha, history_positions, history_ratings, target_positions):
+def blend_contributions(ease, mf, alpha, history_positions, history_ratings, target_positions,
+                        history_weights=None):
     """Split a blended ranking score exactly, for one user.
 
     Both blend inputs are z-scored per user over all movies: z = (s - mean) / std. EASE
-    scores are sums of B[j, t]; MF scores are mean + b_t + sum of MF terms. The blend is
+    scores are sums of w_j B[j, t], with w_j a recency weight (1 when not given); MF
+    scores are mean + b_t + sum of MF terms. The blend is
 
-        constant + alpha * b_t / std_mf + sum_j [(1 - alpha) B[j, t] / std_ease
+        constant + alpha * b_t / std_mf + sum_j [(1 - alpha) w_j B[j, t] / std_ease
                                                  + alpha * mf_term[t, j] / std_mf]
 
     Returns (per-movie terms: targets x history, general-appeal term per target,
     constant). The three parts add up to `blend` for the target movies.
     """
-    history = ease.history_matrix(np.zeros(len(history_positions), int), history_positions, 1)
+    weights = np.ones(len(history_positions)) if history_weights is None else np.asarray(history_weights, float)
+    history = ease.history_matrix(np.zeros(len(history_positions), int), history_positions, 1, weights)
     ease_scores = ease.score(history)[0]
     mf_vector = mf.fold_in(history_positions, history_ratings)
     mf_scores = mf.score_items(mf_vector)
     ease_scale, mf_scale = (1.0 - alpha) / ease_scores.std(), alpha / mf_scores.std()
-    terms = (ease_scale * ease.weights[np.ix_(history_positions, target_positions)].T
+    terms = (ease_scale * (weights[:, None] * ease.weights[np.ix_(history_positions, target_positions)]).T
              + mf_scale * contributions(mf, history_positions, history_ratings, target_positions))
     appeal = mf_scale * mf.item_bias[target_positions]
     constant = mf_scale * (mf.mean - mf_scores.mean()) - ease_scale * ease_scores.mean()
