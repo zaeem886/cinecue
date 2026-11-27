@@ -23,11 +23,19 @@ def check_ratings(baseline, ratings, splitting):
     assert {key: selected[key] for key in ["user_reg", "item_reg"]} == baseline["selected"]
     best_mf = min(ratings["mf_grid"], key=lambda row: row["online RMSE"])
     assert (best_mf["factors"], best_mf["reg"]) == (ratings["mf"]["factors"], ratings["mf"]["reg"])
-    assert ratings["context"]["kept"] == (ratings["context"]["validation_online_gain"] >= 0.002)
+    for context in ["utc_context", "session_context"]:
+        rule = ratings[context]
+        assert rule["kept"] == (rule["validation_online_gain"] >= 0.002), context
+        if "reg" in rule:
+            best = min(rule["grid"], key=lambda row: row["online RMSE"])
+            assert best["session reg"] == rule["reg"]
     for split in ["validation", "test"]:
         rmse = {name: row["RMSE"] for name, row in ratings[split].items()}
         assert rmse["MF (online)"] < rmse["bias (online)"] < rmse["global mean"], (split, rmse)
         assert rmse["bias (online)"] < rmse["bias (frozen)"] and rmse["MF (online)"] < rmse["MF (frozen)"]
+        assert ("MF + session (online)" in rmse) == ratings["session_context"]["kept"]
+    for name, row in ratings["test_bootstrap"].items():
+        assert row["ci_low"] <= row["difference"] <= row["ci_high"], name
     test_rows = next(entry["rows"] for entry in splitting["splits"] if entry["split"] == "test")
     assert sum(row["rows"] for row in ratings["test_by_user_history"]) == test_rows
     assert sum(row["rows"] for row in ratings["test_by_movie_history"]) == test_rows
@@ -35,8 +43,13 @@ def check_ratings(baseline, ratings, splitting):
 
 def check_ranking(ranking):
     selected = ranking["selected"]
-    best_blend = max(ranking["blend_grid"], key=lambda row: row["ndcg"])
-    assert (best_blend["ease_reg"], best_blend["alpha"]) == (selected["ease_reg"], selected["alpha"])
+    # The final blend is the best validation setting without recency (half-life 0).
+    best_blend = max((row for row in ranking["blend_grid"] if row["half_life"] == 0), key=lambda row: row["ndcg"])
+    assert selected["half_life_days"] == 0 and not ranking["recency_variant"]["used"]
+    assert ((best_blend["ease_reg"], best_blend["alpha"], best_blend["half_life"])
+            == (selected["ease_reg"], selected["alpha"], selected["half_life_days"]))
+    for name, row in ranking["test_bootstrap"].items():
+        assert row["ci_low"] <= row["difference"] <= row["ci_high"], name
     grid = {row["weight"]: row for row in ranking["rerank_grid"]}
     floor = 0.95 * grid[0]["ndcg"]
     assert selected["rerank_weight"] == max(weight for weight, row in grid.items() if row["ndcg"] >= floor)
