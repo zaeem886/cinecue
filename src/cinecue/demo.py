@@ -16,12 +16,16 @@ def fit_demo(processed):
                          for s in ('train', 'validation')], ignore_index=True)
     ranking = json.loads((processed / 'ranking_summary.json').read_text())['selected']
     rating = json.loads((processed / 'rating_summary.json').read_text())['mf']
+    return fit_tables(history, load_movies(processed), rating, ranking)
+
+
+def fit_tables(history, catalog, rating, ranking):
     args = (history.user_id, history.movie_id, history.rating)
     mf = MatrixFactorization(**rating).fit(*args)
     ease = EASE(reg=float(ranking['ease_reg'])).fit(*args[:2])
     if not mf.movies.ids.equals(ease.movies.ids):
         raise ValueError('Model catalogs differ.')
-    catalog = load_movies(processed).set_index('movie_id').loc[mf.movies.ids]
+    catalog = catalog.set_index('movie_id').loc[mf.movies.ids]
     counts = history.movie_id.value_counts().reindex(mf.movies.ids, fill_value=0).to_numpy()
     return history, catalog, mf, ease, counts, ranking
 

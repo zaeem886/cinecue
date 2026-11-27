@@ -2,6 +2,13 @@
 
 ## Interactive demo
 
+**Windows quick start:** install Python 3.11–3.14, clone the repository, and
+double-click `start-cinecue.cmd`. It prepares the virtual environment and opens
+Streamlit. The first run needs internet to install dependencies and fetch the
+official MovieLens 1M archive. CineCue verifies the archive, caches it locally,
+and fits the models using ratings through the validation cutoff. No notebook
+runs or manual file transfers are needed.
+
 A local Streamlit interface is available in `app.py`. It uses the notebook outputs
 in `results/`, with `data/processed/` as a fallback.
 From this directory, use a project virtual environment and run:
@@ -28,12 +35,10 @@ and Streamlit dependencies. Install `requirements.txt` separately when running
 notebooks. The notebook requirements and existing model code are unchanged.
 Run `python -m unittest discover -s tests` to check the models and demo adapter.
 
-For a UI smoke test, launch the app, check that missing data produces setup
-instructions, then with processed data present load the models, switch users,
+For a UI smoke test, launch the app, select your favorite movies, switch users,
 toggle discovery, and hide/show explanations. The title list should stay identical
 when only the explanation toggle changes, and contain no movies in that user's
-train/validation history. Colab is suitable for generating the data; download its
-processed outputs into `data/processed/` before launching the local demo.
+train/validation history.
 
 CineCue is a context-aware and explainable movie recommendation project. Phase 1
 prepares MovieLens 1M through cleaning, exploratory data analysis (EDA), and

@@ -7,7 +7,8 @@ import streamlit as st
 
 ROOT = Path(__file__).resolve().parent
 sys.path.insert(0, str(ROOT / 'src'))
-from cinecue.demo import fit_demo, recommend
+from cinecue.demo import fit_demo, fit_tables, recommend
+from cinecue.first_run import official_tables
 
 st.set_page_config(page_title='CineCue · Movie discovery', page_icon='🎬', layout='wide')
 st.title('🎬 CineCue')
@@ -16,21 +17,19 @@ st.write('Pick movies you love to find something new, or explore an existing Mov
 required = ['train.csv', 'validation.csv', 'movies_clean.csv', 'movie_features.csv',
             'rating_summary.json', 'ranking_summary.json']
 locations = [ROOT / 'results', ROOT / 'data' / 'processed']
-processed = next((p for p in locations if all((p / f).is_file() for f in required)), locations[0])
-missing = [name for name in required if not (processed / name).is_file()]
-if missing:
-    st.info('Place the processed notebook outputs together in results/ or data/processed/.')
-    st.write('Missing files: ' + ', '.join(missing))
-    st.code('python scripts/download_data.py\n# Run notebooks 01 through 06 in order. See README.md.')
-    st.stop()
+processed = next((p for p in locations if all((p / f).is_file() for f in required)), None)
 
 
 @st.cache_resource(show_spinner='Fitting the selected models. This can take several minutes…')
 def models(signature):
+    if processed is None:
+        history, catalog = official_tables(ROOT / 'data' / 'raw')
+        return fit_tables(history, catalog, dict(factors=64, reg=0.08, n_iter=10, seed=0),
+                          dict(ease_reg=30000, alpha=0.75, rerank_weight=1.5))
     return fit_demo(processed)
 
 
-signature = (str(processed), tuple((name, (processed / name).stat().st_mtime_ns) for name in required))
+signature = (str(processed), tuple((processed / name).stat().st_mtime_ns for name in required)) if processed else 'ml-1m'
 try:
     bundle = models(signature)
 except Exception as error:
