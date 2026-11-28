@@ -2,3 +2,4 @@ numpy==2.3.5
 certifi==2026.11.20
 pandas==2.3.3
 streamlit==1.67.0
+psycopg[binary]==3.3.9

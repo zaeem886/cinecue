@@ -1,0 +1,14 @@
+{
+  "name": "cinecue-database",
+  "private": true,
+  "description": "Prisma schema and migrations for CineCue user accounts and profiles. The Python app reads and writes the same tables with psycopg.",
+  "scripts": {
+    "db:migrate": "prisma migrate deploy",
+    "db:migrate:dev": "prisma migrate dev",
+    "db:status": "prisma migrate status",
+    "db:studio": "prisma studio"
+  },
+  "devDependencies": {
+    "prisma": "6.19.3"
+  }
+}
