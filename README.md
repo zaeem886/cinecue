@@ -76,6 +76,34 @@ Restart Streamlit after rebuilding. Changes to results files do not automaticall
 replace an existing saved artifact. Only load pickle artifacts generated on a
 trusted machine, because unpickling can execute Python code.
 
+## Larger catalog and movie posters
+
+The research notebooks use MovieLens 1M (films up to 2000). The website can serve a
+newer, larger catalog built from **MovieLens 32M**: the 9,000 most-rated films
+(1902–2023) and a seeded sample of 30,000 users, 5,469,043
+ratings in total. The same pipeline is used (EASE + MF blend, 20-rating floor, popularity
+re-ranking). Its settings were re-checked on each sampled user's last 10
+ratings: the best setting was EASE penalty 1,000 and blend weight
+0.75, with NDCG@10 0.098 against 0.043
+for popularity (4,000 users) and MF held-out RMSE 0.834. This is a sanity
+check for the website, not part of the Phase 2 evaluation.
+
+```bash
+# Download https://files.grouplens.org/datasets/movielens/ml-32m.zip into data/raw/ml-32m/, then:
+python scripts/build_app_catalog.py --archive data/raw/ml-32m/ml-32m.zip   # about 15-20 minutes
+```
+
+This writes `artifacts/recommender-32m.pkl` (about 400 MB, git-ignored) and the aggregate
+`results/app_catalog_summary.json`. When that file exists the website loads it; otherwise it
+uses the MovieLens 1M model as before. No 32M ratings are committed.
+
+**Posters.** `scripts/fetch_posters.py` maps each movie's IMDb ID (from MovieLens
+`links.csv`) to its English Wikipedia article through Wikidata and records the article's
+lead image. `results/posters.csv` stores only the image URLs (9,702 movies, 97% of the 1M and
+32M catalogs); the browser loads the images from Wikimedia. Movies without a poster keep the
+generated genre tile. Film posters on Wikipedia are non-free images used under fair use, so
+keep this to the course project and do not redistribute the images.
+
 ## Recommendation behavior
 
 EASE learns which movies appear together in rating histories. Matrix factorization

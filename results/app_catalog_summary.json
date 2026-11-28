@@ -1,0 +1,168 @@
+{
+  "source": "MovieLens 32M (ml-32m.zip, GroupLens)",
+  "selection": {
+    "archive": "ml-32m.zip",
+    "movies": 9000,
+    "users": 30000,
+    "holdout": 10,
+    "tune_users": 4000,
+    "ease_regs": [
+      300,
+      1000,
+      3000,
+      10000,
+      30000
+    ],
+    "seed": 0,
+    "out": "recommender-32m.pkl"
+  },
+  "catalog": {
+    "ease_reg": 1000,
+    "alpha": 0.75,
+    "rerank_weight": 1.5,
+    "dataset": "MovieLens 32M",
+    "movies": 9000,
+    "users": 30000,
+    "ratings": 5469043,
+    "first_year": 1902,
+    "last_year": 2023
+  },
+  "holdout": {
+    "ratings_per_user": 10,
+    "tuning_users": 4000,
+    "mf_rmse": 0.8342319520797403,
+    "popularity_ndcg": 0.04337613885683123,
+    "selected": {
+      "ease_reg": 1000,
+      "alpha": 0.75,
+      "ndcg": 0.09816509925573283
+    },
+    "grid": [
+      {
+        "ease_reg": 300,
+        "alpha": 0.0,
+        "ndcg": 0.08131446110765657
+      },
+      {
+        "ease_reg": 300,
+        "alpha": 0.5,
+        "ndcg": 0.09039525943200388
+      },
+      {
+        "ease_reg": 300,
+        "alpha": 0.6,
+        "ndcg": 0.09282729385086537
+      },
+      {
+        "ease_reg": 300,
+        "alpha": 0.75,
+        "ndcg": 0.09648511133034841
+      },
+      {
+        "ease_reg": 300,
+        "alpha": 0.9,
+        "ndcg": 0.07056410156689799
+      },
+      {
+        "ease_reg": 1000,
+        "alpha": 0.0,
+        "ndcg": 0.08338519259817354
+      },
+      {
+        "ease_reg": 1000,
+        "alpha": 0.5,
+        "ndcg": 0.09197093966839484
+      },
+      {
+        "ease_reg": 1000,
+        "alpha": 0.6,
+        "ndcg": 0.09499022748070236
+      },
+      {
+        "ease_reg": 1000,
+        "alpha": 0.75,
+        "ndcg": 0.09816509925573283
+      },
+      {
+        "ease_reg": 1000,
+        "alpha": 0.9,
+        "ndcg": 0.07434652311797024
+      },
+      {
+        "ease_reg": 3000,
+        "alpha": 0.0,
+        "ndcg": 0.0834080652044392
+      },
+      {
+        "ease_reg": 3000,
+        "alpha": 0.5,
+        "ndcg": 0.09170008812832646
+      },
+      {
+        "ease_reg": 3000,
+        "alpha": 0.6,
+        "ndcg": 0.09383606492777963
+      },
+      {
+        "ease_reg": 3000,
+        "alpha": 0.75,
+        "ndcg": 0.09714268033886742
+      },
+      {
+        "ease_reg": 3000,
+        "alpha": 0.9,
+        "ndcg": 0.07535717260799629
+      },
+      {
+        "ease_reg": 10000,
+        "alpha": 0.0,
+        "ndcg": 0.08154615179034416
+      },
+      {
+        "ease_reg": 10000,
+        "alpha": 0.5,
+        "ndcg": 0.08759377036867269
+      },
+      {
+        "ease_reg": 10000,
+        "alpha": 0.6,
+        "ndcg": 0.09089782649769011
+      },
+      {
+        "ease_reg": 10000,
+        "alpha": 0.75,
+        "ndcg": 0.09492649268283236
+      },
+      {
+        "ease_reg": 10000,
+        "alpha": 0.9,
+        "ndcg": 0.0741931786308511
+      },
+      {
+        "ease_reg": 30000,
+        "alpha": 0.0,
+        "ndcg": 0.07778531371125925
+      },
+      {
+        "ease_reg": 30000,
+        "alpha": 0.5,
+        "ndcg": 0.08369977126809408
+      },
+      {
+        "ease_reg": 30000,
+        "alpha": 0.6,
+        "ndcg": 0.08618682650861283
+      },
+      {
+        "ease_reg": 30000,
+        "alpha": 0.75,
+        "ndcg": 0.09001308389806793
+      },
+      {
+        "ease_reg": 30000,
+        "alpha": 0.9,
+        "ndcg": 0.07128855841344417
+      }
+    ]
+  }
+}
