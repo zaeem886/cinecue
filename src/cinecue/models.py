@@ -289,12 +289,32 @@ class EASE:
     def __init__(self, reg=1000.0):
         self.reg = reg
 
-    def fit(self, users, movies):
+    def fit(self, users, movies, chunk_users=4096, dtype=np.float64):
+        """Fit B from (user, movie) pairs.
+
+        X^T X is accumulated over blocks of `chunk_users` users, so memory stays at
+        movies x movies however many users there are. Counts of 0/1 values are exact,
+        so the result does not depend on the block size. `dtype` sets the precision
+        of the stored weights (float32 halves the size of a large catalog's model).
+        """
         self.users, self.movies = IdIndex(users), IdIndex(movies)
-        X = self.history_matrix(self.users.encode(users), self.movies.encode(movies), len(self.users))
-        P = np.linalg.inv(X.T @ X + self.reg * np.eye(len(self.movies)))
-        self.weights = -P / np.diag(P)
-        np.fill_diagonal(self.weights, 0.0)
+        u, i = self.users.encode(users), self.movies.encode(movies)
+        order = np.argsort(u, kind="stable")
+        u, i = u[order], i[order]
+        n = len(self.movies)
+        gram = np.zeros((n, n))
+        bounds = np.searchsorted(u, np.arange(0, len(self.users) + chunk_users, chunk_users))
+        for start, stop in zip(bounds[:-1], bounds[1:]):
+            if start == stop:
+                continue
+            first = u[start]
+            X = np.zeros((u[stop - 1] - first + 1, n), dtype=np.float32)
+            X[u[start:stop] - first, i[start:stop]] = 1.0
+            gram += (X.T @ X).astype(np.float64)
+        P = np.linalg.inv(gram + self.reg * np.eye(n))
+        weights = -P / np.diag(P)
+        np.fill_diagonal(weights, 0.0)
+        self.weights = weights.astype(dtype, copy=False)
         return self
 
     def history_matrix(self, rows, movie_positions, n_rows, weights=None):

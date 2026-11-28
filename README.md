@@ -7,7 +7,7 @@ popularity exposure on MovieLens 1M.
 
 ## Run the website
 
-Install Python 3.11?3.14, clone this repository, and enter its directory.
+Install Python 3.11–3.14, clone this repository, and enter its directory.
 
 **Windows:** double-click `start-cinecue.cmd`. The launcher creates `.venv`,
 installs `requirements-app.txt`, and starts Streamlit. Internet is required for
@@ -76,6 +76,34 @@ Restart Streamlit after rebuilding. Changes to results files do not automaticall
 replace an existing saved artifact. Only load pickle artifacts generated on a
 trusted machine, because unpickling can execute Python code.
 
+## Larger catalog and movie posters
+
+The research notebooks use MovieLens 1M (films up to 2000). The website can serve a
+newer, larger catalog built from **MovieLens 32M**: the 9,000 most-rated films
+(1902–2023) and a seeded sample of 30,000 users, 5,469,043
+ratings in total. The same pipeline is used (EASE + MF blend, 20-rating floor, popularity
+re-ranking). Its settings were re-checked on each sampled user's last 10
+ratings: the best setting was EASE penalty 1,000 and blend weight
+0.75, with NDCG@10 0.098 against 0.043
+for popularity (4,000 users) and MF held-out RMSE 0.834. This is a sanity
+check for the website, not part of the Phase 2 evaluation.
+
+```bash
+# Download https://files.grouplens.org/datasets/movielens/ml-32m.zip into data/raw/ml-32m/, then:
+python scripts/build_app_catalog.py --archive data/raw/ml-32m/ml-32m.zip   # about 15-20 minutes
+```
+
+This writes `artifacts/recommender-32m.pkl` (about 400 MB, git-ignored) and the aggregate
+`results/app_catalog_summary.json`. When that file exists the website loads it; otherwise it
+uses the MovieLens 1M model as before. No 32M ratings are committed.
+
+**Posters.** `scripts/fetch_posters.py` maps each movie's IMDb ID (from MovieLens
+`links.csv`) to its English Wikipedia article through Wikidata and records the article's
+lead image. `results/posters.csv` stores only the image URLs (9,702 movies, 97% of the 1M and
+32M catalogs); the browser loads the images from Wikimedia. Movies without a poster keep the
+generated genre tile. Film posters on Wikipedia are non-free images used under fair use, so
+keep this to the course project and do not redistribute the images.
+
 ## Recommendation behavior
 
 EASE learns which movies appear together in rating histories. Matrix factorization
@@ -88,8 +116,10 @@ generate a personalized list. Selecting a MovieLens profile uses that user's
 train/validation history instead. Already rated or selected titles are excluded,
 and eligible movies must have at least 20 history ratings.
 
-The displayed predicted stars come from MF. The combined ranking score determines
-list order. **Discover less popular films** applies the selected popularity penalty
+The displayed predicted stars come from MF on the whole profile. The rating-session
+adjustment from notebook 5 needs a live rating session (earlier ratings within the
+same hour), so the website's lists do not apply it. The combined ranking score
+determines list order. **Discover less popular films** applies the selected popularity penalty
 to the top candidates. Explanations name a liked movie with a positive score
 contribution when available and report shared genres. The final ranker excludes
 the UTC and recency adjustments tested in the notebooks.
@@ -100,8 +130,47 @@ the UTC and recency adjustments tested in the notebooks.
 - **Movie library** provides title/year search, genre filters, and pagination.
 - **Watchlist** saves picks during the browser session and exports them as CSV.
   Closing or resetting a session can clear the list, so export it to keep a copy.
-- **Project results** shows the included test metrics and a ranking comparison chart.
+- **Project results** shows headline test results and compares the final ranking
+  models; the recency variants evaluated in notebook 6 are not shown because CineCue
+  does not use them.
 - **Dark mode** switches the interface theme and retains the selection during navigation.
+- **Likes with a moment.** ♡ Like on any card, or adding a title under *Movies you love*,
+  records the movie with the weekday and time of day (night, morning, afternoon,
+  evening). Likes are saved locally in `data/likes.json`, which Git ignores. The sidebar's
+  *Right now* card shows the current moment. Switch off *Use my clock* to pick another
+  day, and change a like's day under *When you liked them*.
+- **Tonight.** *In the mood for* boosts chosen genres (Nudge, Strong, or Only these).
+  *Lean on {weekday} likes* (Off, Light, Strong) makes likes from the current weekday and
+  time of day count more. For example, a like of Inside Man on a Monday evening pulls
+  crime thrillers up on later Monday evenings.
+- **Search** finds any movie by title and shows how well it fits your taste today: its rank
+  among the 20+-rating catalog for your likes, the current day and time, and your mood
+  (*Top pick today* = top 12, the size of a Discover list, down to *Not your taste today*),
+  where it usually ranks, the like that pulls it closest and the one that pushes it away,
+  and whether it fits your mood. Results can be ordered by title match or by fit today. The
+  Movie library shows the same match once you have likes. Mood and day weighting carry
+  over between Discover, Search and the library.
+- **Hover details.** Hovering over or focusing a poster lists every signal behind the pick:
+  predicted stars, how many places the current context moved it, the like that
+  contributed most and when that like happened, and mood matches.
+
+### Does the day of the week matter?
+
+`scripts/evaluate_context.py` trains a context re-ranker on MovieLens 1M. Its signals
+are likes from the same weekday or time of day, a user's genre shift on that weekday,
+and everyone's weekday genre shift. It learns the feature weights by logistic regression
+on the validation period (5-fold over users). A variant is selected only if its paired
+bootstrap gain over the final ranker has a 95% interval above zero. Test is then used
+once. Results are in `results/context_summary.json` and on the *Project results* page.
+
+No signal helped. Test NDCG@10 is 0.1003 for the final ranker. The closest context variant,
+same-time-of-day likes, differs by −0.0001 (95% interval −0.0004 to +0.0002). Same-weekday
+likes (−0.0003, −0.0006 to −0.0000), the user's weekday genres (−0.0013, −0.0025 to −0.0002)
+and all signals together (−0.0013, −0.0023 to −0.0002) are reliably worse. The like-based
+signals are one-sided and softly capped: likes from the current day pull their neighbours up
+but never push other movies down. The validated ranker therefore uses no context. In the website, day weighting is a user preference, labelled as such.
+MovieLens timestamps are UTC rating-submission times, often from one sitting, not
+viewing times. The local likes the website now records are the data a future test needs.
 
 The explanation toggle changes presentation only. It can support a survey
 demonstration. Survey responses are not collected by the current website.

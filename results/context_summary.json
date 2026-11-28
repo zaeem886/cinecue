@@ -1,0 +1,273 @@
+{
+  "question": "Do same-weekday likes and weekday genre leanings improve top-10 ranking for that day?",
+  "protocol": {
+    "event": "user-day (UTC) with a liked unseen movie",
+    "k": 10,
+    "candidates": 100,
+    "relevance": "rating >= 4",
+    "min_support": 20,
+    "cv_folds": 5,
+    "dayparts": {
+      "night": "00-06h UTC",
+      "morning": "06-12h UTC",
+      "afternoon": "12-18h UTC",
+      "evening": "18-24h UTC"
+    },
+    "selection": "5-fold CV over validation users; a context variant is chosen only if its paired bootstrap gain over the final ranker has a 95% interval above zero; test is used once, for reporting"
+  },
+  "events": {
+    "validation": 888,
+    "validation_users": 491,
+    "test": 7593,
+    "test_users": 1156,
+    "test_share_with_same_weekday_history": 0.5880416172790728
+  },
+  "variants": [
+    {
+      "variant": "final ranker",
+      "validation_cv_ndcg": 0.10228751912756348,
+      "test_ndcg": 0.10029947955558534,
+      "weights": {
+        "blend": 1.0
+      }
+    },
+    {
+      "variant": "+ same weekday",
+      "validation_cv_ndcg": 0.10182724060154472,
+      "test_ndcg": 0.09998713193696347,
+      "weights": {
+        "blend": 1.085451171410476,
+        "same_weekday": -0.03433082530869875
+      },
+      "cv_vs_final_difference": -0.00046027852601876473,
+      "cv_vs_final_ci_low": -0.0015180297970436903,
+      "cv_vs_final_ci_high": 0.00048218025113069677,
+      "vs_final_difference": -0.00031234761862186655,
+      "vs_final_ci_low": -0.000625944602058218,
+      "vs_final_ci_high": -1.7784109172657806e-05
+    },
+    {
+      "variant": "+ same daypart",
+      "validation_cv_ndcg": 0.10167904130157965,
+      "test_ndcg": 0.10021550255507504,
+      "weights": {
+        "blend": 1.0703176075999998,
+        "same_daypart": 0.02192838399665122
+      },
+      "cv_vs_final_difference": -0.000608477825983833,
+      "cv_vs_final_ci_low": -0.002060713251728898,
+      "cv_vs_final_ci_high": 0.0003198641371651527,
+      "vs_final_difference": -8.39770005102991e-05,
+      "vs_final_ci_low": -0.0004239371610823193,
+      "vs_final_ci_high": 0.00018879282346320495
+    },
+    {
+      "variant": "+ weekday genres (user)",
+      "validation_cv_ndcg": 0.10150225808215144,
+      "test_ndcg": 0.0989620294386641,
+      "weights": {
+        "blend": 1.0691494614297292,
+        "weekday_genre": 0.3191148966814487
+      },
+      "cv_vs_final_difference": -0.0007852610454120446,
+      "cv_vs_final_ci_low": -0.0029827116112756463,
+      "cv_vs_final_ci_high": 0.001269083306370987,
+      "vs_final_difference": -0.0013374501169212405,
+      "vs_final_ci_low": -0.002467999747564421,
+      "vs_final_ci_high": -0.00023869571694616292
+    },
+    {
+      "variant": "+ weekday genres (everyone)",
+      "validation_cv_ndcg": 0.10188338213600535,
+      "test_ndcg": 0.10026438415411353,
+      "weights": {
+        "blend": 1.0805577800960589,
+        "global_genre": -0.04137559123290755
+      },
+      "cv_vs_final_difference": -0.00040413699155812666,
+      "cv_vs_final_ci_low": -0.0008613563170619558,
+      "cv_vs_final_ci_high": 2.031999221473485e-05,
+      "vs_final_difference": -3.5095401471813004e-05,
+      "vs_final_ci_low": -0.00011273576164441239,
+      "vs_final_ci_high": 4.299877702425165e-05
+    },
+    {
+      "variant": "all context",
+      "validation_cv_ndcg": 0.10026991973725266,
+      "test_ndcg": 0.09904683668812703,
+      "weights": {
+        "blend": 1.0583875360096344,
+        "same_weekday": -0.03952599823994138,
+        "same_daypart": 0.03485783282892411,
+        "weekday_genre": 0.3177679923534487,
+        "global_genre": -0.06995103307918393
+      },
+      "cv_vs_final_difference": -0.0020175993903108203,
+      "cv_vs_final_ci_low": -0.004568648436922328,
+      "cv_vs_final_ci_high": 0.00023618868118151822,
+      "vs_final_difference": -0.0012526428674583118,
+      "vs_final_ci_low": -0.002348677628634748,
+      "vs_final_ci_high": -0.00017775690763898656
+    }
+  ],
+  "selected": {
+    "variant": "final ranker",
+    "depth": 100,
+    "weights": {
+      "blend": 1.0,
+      "same_weekday": 0.0,
+      "same_daypart": 0.0,
+      "weekday_genre": 0.0,
+      "global_genre": 0.0
+    },
+    "test_ndcg": 0.10029947955558534,
+    "test_vs_final": null,
+    "test_vs_final_same_weekday_history": null
+  },
+  "global_weekday_genre_lift": {
+    "Monday": {
+      "Action": -0.01649258119270298,
+      "Adventure": -0.028667524384199613,
+      "Animation": 0.05336988406614639,
+      "Children": -0.015654733964586057,
+      "Comedy": -0.013440201691688927,
+      "Crime": 0.008864004142508378,
+      "Documentary": 0.10574813764671058,
+      "Drama": 0.019993843618480243,
+      "Fantasy": -0.042332031877942454,
+      "Film-Noir": 0.03437027392658101,
+      "Horror": -0.013533374154410012,
+      "Musical": 0.03986554166858102,
+      "Mystery": 0.010893648473304374,
+      "Romance": -0.034047361754583956,
+      "Sci-Fi": 0.027917619990239156,
+      "Thriller": -0.004222323631863764,
+      "War": 0.017185459925360545,
+      "Western": 0.0029745308070703537
+    },
+    "Tuesday": {
+      "Action": -0.0033600872482071704,
+      "Adventure": 0.004126836282771105,
+      "Animation": 0.052036730502852964,
+      "Children": 0.015212956069727465,
+      "Comedy": 0.03410535890505149,
+      "Crime": 0.0013318415648405804,
+      "Documentary": 0.20906849736351243,
+      "Drama": -0.015378689020733312,
+      "Fantasy": 0.009123127413629067,
+      "Film-Noir": -0.02133046176383481,
+      "Horror": -0.02924724637107287,
+      "Musical": 0.005735338351983247,
+      "Mystery": -0.034709232298850354,
+      "Romance": -0.00016640451486559608,
+      "Sci-Fi": -1.7571982797163843e-05,
+      "Thriller": -0.01948438673573876,
+      "War": -0.042625171543814594,
+      "Western": -0.04643222845928532
+    },
+    "Wednesday": {
+      "Action": 0.016004010991655743,
+      "Adventure": 0.0024963751342047323,
+      "Animation": 0.017389663472108952,
+      "Children": 0.04017620335894392,
+      "Comedy": -0.006741237964300684,
+      "Crime": 0.012459270797025877,
+      "Documentary": -0.02498176496708279,
+      "Drama": -0.015216443008956505,
+      "Fantasy": -0.004575141049807579,
+      "Film-Noir": -0.051720447150803844,
+      "Horror": -0.006534804575241921,
+      "Musical": -0.007702708996479567,
+      "Mystery": 0.018218794416232566,
+      "Romance": -0.0024452360803088723,
+      "Sci-Fi": -0.013094568291568439,
+      "Thriller": 0.013819932134421018,
+      "War": 0.006790941333175109,
+      "Western": 0.002716808112927223
+    },
+    "Thursday": {
+      "Action": 0.036462383549905455,
+      "Adventure": 0.018949529097792708,
+      "Animation": -0.11429236398666236,
+      "Children": -0.11107882637605244,
+      "Comedy": -0.009299611985816109,
+      "Crime": 0.018620998652514643,
+      "Documentary": -0.09052783923152681,
+      "Drama": 0.011348124638158532,
+      "Fantasy": 0.004527926365629009,
+      "Film-Noir": 0.061391481077093656,
+      "Horror": -0.009595232599497435,
+      "Musical": -0.07816624964110176,
+      "Mystery": -0.0007403512448474337,
+      "Romance": 0.0012866116897536466,
+      "Sci-Fi": -0.017688222028307325,
+      "Thriller": -0.010155356303867071,
+      "War": 0.03214830287214841,
+      "Western": 0.07891014303664486
+    },
+    "Friday": {
+      "Action": -0.015665525381112645,
+      "Adventure": -0.026516373722241374,
+      "Animation": -0.06313359511203308,
+      "Children": -0.03509705344761734,
+      "Comedy": -0.0036558984082495035,
+      "Crime": -0.004226782989145465,
+      "Documentary": -0.08247020105327092,
+      "Drama": -0.012232478422855367,
+      "Fantasy": 0.018877335059959487,
+      "Film-Noir": 0.013377235589428,
+      "Horror": 0.02876449308096947,
+      "Musical": -0.03464050316703712,
+      "Mystery": 0.07666115271237553,
+      "Romance": 0.02744541546685175,
+      "Sci-Fi": 0.0085149644833617,
+      "Thriller": 0.04655585457362909,
+      "War": 0.002379913587699179,
+      "Western": 0.002654305624607655
+    },
+    "Saturday": {
+      "Action": 0.0010163637059545068,
+      "Adventure": 0.033840796716437416,
+      "Animation": 0.0202675118507091,
+      "Children": 0.10251410141571124,
+      "Comedy": -0.026580173584402605,
+      "Crime": -0.01147458765322517,
+      "Documentary": -0.0617192421906322,
+      "Drama": 0.01255137829704426,
+      "Fantasy": 0.016134483391547303,
+      "Film-Noir": -0.03859230606222823,
+      "Horror": -0.09014662844245111,
+      "Musical": 0.04129374394507633,
+      "Mystery": -0.05736768395896513,
+      "Romance": 0.04579700840663897,
+      "Sci-Fi": -0.037630689474096334,
+      "Thriller": -0.030761200651761574,
+      "War": 0.028463046628945058,
+      "Western": 0.04493164799815823
+    },
+    "Sunday": {
+      "Action": -0.015613742795124452,
+      "Adventure": 0.008701243186219489,
+      "Animation": 0.0019979259497460117,
+      "Children": 0.019428144464237827,
+      "Comedy": 0.016373465752871675,
+      "Crime": -0.03324573139712036,
+      "Documentary": -0.20038324601700155,
+      "Drama": -0.002370824861942662,
+      "Fantasy": 0.012480640238858845,
+      "Film-Noir": -0.018707332877979155,
+      "Horror": 0.09871839046148634,
+      "Musical": 0.025738096256041253,
+      "Mystery": -0.027213723847858393,
+      "Romance": -0.016721772125704294,
+      "Sci-Fi": 0.01408331429718721,
+      "Thriller": 0.0013297538179115266,
+      "War": -0.03901401750871165,
+      "Western": -0.07823215785289712
+    }
+  },
+  "caveats": [
+    "MovieLens timestamps are rating-submission times in UTC, not local viewing times.",
+    "Many MovieLens users rate in bursts, so weekday history is often one or two days."
+  ]
+}
