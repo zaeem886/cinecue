@@ -46,8 +46,9 @@ def recommend(bundle, user_id, k=10, discover=False, liked_movies=None):
     k = min(k, available)
     if not len(profile):
         ranked = top_k(counts[None, :], exclude, k)[0]
-        return [dict(title=catalog.iloc[t].title, genres=catalog.iloc[t].genres,
-                     prediction=None, reason='Popular among users in the training history.') for t in ranked]
+        return [dict(movie_id=int(catalog.index[t]), title=catalog.iloc[t].title, genres=catalog.iloc[t].genres,
+                     prediction=None, ratings=int(counts[t]), because=None, shared=[],
+                     reason='Popular among users in the training history.') for t in ranked]
     vector = mf.fold_in(positions, stars)
     predicted = mf.score_items(vector)
     ease_scores = ease.score(ease.history_matrix(np.zeros(len(positions), int), positions, 1))
@@ -63,16 +64,19 @@ def recommend(bundle, user_id, k=10, discover=False, liked_movies=None):
     rows = []
     for row, target in enumerate(ranked):
         eligible = np.flatnonzero((stars >= 4) & (terms[row] > 0))
+        because, shared = None, []
         if len(eligible):
             source = eligible[np.argmax(terms[row, eligible])]
             source_movie = catalog.iloc[positions[source]]
             shared = sorted(set(str(source_movie.genres).split('|')) &
                             set(str(catalog.iloc[target].genres).split('|')))
+            because = source_movie.title
             reason = f'Your positive rating for {source_movie.title} contributes to this recommendation.'
             if shared:
                 reason += ' Shared genres: ' + ', '.join(shared) + '.'
         else:
             reason = 'Suggested from your combined rating history and general movie appeal.'
-        rows.append(dict(title=catalog.iloc[target].title, genres=catalog.iloc[target].genres,
-                         prediction=float(np.clip(predicted[target], 1, 5)), reason=reason))
+        rows.append(dict(movie_id=int(catalog.index[target]), title=catalog.iloc[target].title,
+                         genres=catalog.iloc[target].genres, prediction=float(np.clip(predicted[target], 1, 5)),
+                         ratings=int(counts[target]), because=because, shared=shared, reason=reason))
     return rows
