@@ -6,8 +6,9 @@ current moment is the *context*. ContextRanker re-orders the final ranker's top
 candidates with a linear score over five features of each candidate movie:
 
     blend           the final ranker's score (z-scored EASE + MF blend), unchanged
-    same_weekday    z-scored EASE score from only the likes made on the current weekday
-    same_daypart    z-scored EASE score from only the likes made in the current daypart
+    same_weekday    pull from only the likes made on the current weekday: the positive part
+                    of their z-scored EASE score, softly capped at 2.5 (see squash)
+    same_daypart    the same for the likes made in the current daypart
     weekday_genre   how much this user's likes on the current weekday lean to the
                     candidate's genres, as a shrunk log-lift over the user's overall mix
     global_genre    the same lift for everyone's ratings on the current weekday
@@ -85,11 +86,28 @@ def genre_affinity(G_candidates, lift):
     return np.divide(G_candidates @ lift, sizes, out=np.zeros(len(G_candidates)), where=sizes > 0)
 
 
+CAP = 2.5
+
+
+def squash(z, cap=CAP):
+    """cap * tanh(z / cap): about linear up to +-2, never beyond +-cap.
+
+    EASE scores from one or two likes have heavy tails (z of 20+ for close neighbours), which
+    would let a single like outweigh the whole blend for movies far down the catalogue.
+    """
+    return cap * np.tanh(np.asarray(z, float) / cap)
+
+
 def _z_or_zero(scores, mask):
-    """Row z-scores of EASE scores from a subset of the history; zeros when the subset is empty."""
+    """Pull from a subset of the likes: squashed positive part of the z-scored EASE score.
+
+    One-sided on purpose: these likes pull their neighbours up but never push a movie down,
+    because EASE's negative weights mostly mean "rarely rated together", not "dislike".
+    Zeros when the subset is empty.
+    """
     if not mask.any():
         return np.zeros(scores.shape[-1])
-    return standardize(scores[None, :])[0]
+    return squash(np.maximum(standardize(scores[None, :])[0], 0.0))
 
 
 def context_features(ease, mf, alpha, positions, stars, like_weekdays, like_dayparts,
