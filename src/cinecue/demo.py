@@ -271,30 +271,40 @@ def taste_match(bundle, tables, ranker, likes, movie_ids, weekday=0, part=0, moo
     The score is the same one Discover ranks by. `rank` is the movie's place among comparable
     movies (20+ ratings, not already liked) today, and `percent` the share of them it beats;
     `usual_rank`/`usual` are the same for the plain final ranker, without the day context or
-    mood, so the difference shows what today changes. Reasons name the like that pulls the movie closest and the one that
-    pushes it furthest away, both exact terms of the score. Returns {movie_id: dict}; empty
-    without likes, since there is no taste to compare with.
+    mood, so the difference shows what today changes. Reasons name the like that pulls the movie
+    closest and the one that pushes it furthest away, both exact terms of the score.
+
+    Without likes there is no personal taste yet, so the score is the one Discover uses then:
+    general appeal (log popularity) plus the mood; such results carry basis='general'.
+    Returns {movie_id: dict}.
     """
     from .context import context_features, genre_names
     _, catalog, mf, ease, counts, settings = bundle
     G, vocabulary, lift = tables
     positions, stars, days, parts = _profile(bundle, likes)
     targets = mf.movies.encode(np.array(list(movie_ids), dtype=np.int64)) if len(movie_ids) else np.array([], int)
-    if not len(positions) or not len(targets):
+    if not len(targets):
         return {}
-    features = context_features(ease, mf, float(settings['alpha']), positions, stars, days, parts,
-                                weekday, part, G, lift)
     pool = counts >= 20
     pool[positions] = False
     match, mood = _mood_match(tables, mood)
-    context_score = ranker.score(features)
-    today = context_score + _mood_boost(context_score, match, ~pool, mood_strength, ranker.depth)
-    usual = features[:, 0]
-    reference_today, reference_usual = np.sort(today[pool]), np.sort(usual[pool])
     known = targets >= 0
     terms = np.zeros((len(targets), len(positions)))
-    terms[known] = _like_terms(bundle, ranker, positions, stars, days, parts, weekday, part, targets[known])
-    predicted = mf.score_items(mf.fold_in(positions, stars))
+    if len(positions):
+        basis = 'likes'
+        features = context_features(ease, mf, float(settings['alpha']), positions, stars, days, parts,
+                                    weekday, part, G, lift)
+        context_score = ranker.score(features)
+        usual = features[:, 0]
+        terms[known] = _like_terms(bundle, ranker, positions, stars, days, parts, weekday, part, targets[known])
+        predicted = mf.score_items(mf.fold_in(positions, stars))
+    else:  # no likes yet: Discover's "popular in the community" score
+        basis = 'general'
+        pop = np.log1p(counts.astype(float))
+        context_score = usual = (pop - pop.mean()) / pop.std()
+        predicted = None
+    today = context_score + _mood_boost(context_score, match, ~pool, mood_strength, ranker.depth)
+    reference_today, reference_usual = np.sort(today[pool]), np.sort(usual[pool])
     liked_genres = [set(genre_names(catalog.iloc[p].genres)) for p in positions]
     liked_positions = set(positions.tolist())
     out = {}
@@ -309,8 +319,8 @@ def taste_match(bundle, tables, ranker, likes, movie_ids, weekday=0, part=0, moo
         percent = 100.0 * np.searchsorted(reference_today, today[target]) / size
         before = 100.0 * np.searchsorted(reference_usual, usual[target]) / size
         level, verdict = match_level(rank)
-        closest = int(np.argmax(terms[row])) if terms[row].max() > 0 else None
-        furthest = int(np.argmin(terms[row])) if terms[row].min() < 0 else None
+        closest = int(np.argmax(terms[row])) if len(positions) and terms[row].max() > 0 else None
+        furthest = int(np.argmin(terms[row])) if len(positions) and terms[row].min() < 0 else None
 
         def describe(k):
             if k is None:
@@ -320,13 +330,13 @@ def taste_match(bundle, tables, ranker, likes, movie_ids, weekday=0, part=0, moo
                         shared=sorted(set(genre_names(like_movie.genres)) & names))
         sharing = sum(bool(g & names) for g in liked_genres)
         out[int(movie_id)] = dict(
-            rank=rank, usual_rank=usual_rank, pool=size, level=level, label=verdict,
+            rank=rank, usual_rank=usual_rank, pool=size, level=level, label=verdict, basis=basis,
             percent=round(float(percent), 1), usual=round(float(before), 1),
             liked=int(target) in liked_positions, low_data=bool(counts[target] < 20),
             closest=describe(closest), furthest=describe(furthest) if furthest != closest else None,
             sharing_likes=int(sharing), total_likes=len(positions),
             mood_match=sorted(mood & names), mood_miss=sorted(mood - names) if mood else [],
-            prediction=float(np.clip(predicted[target], 1, 5)))
+            prediction=None if predicted is None else float(np.clip(predicted[target], 1, 5)))
     return out
 
 

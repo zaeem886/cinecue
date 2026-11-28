@@ -182,9 +182,19 @@ class TasteMatchTests(unittest.TestCase):
             if m['closest']:
                 self.assertIn(m['closest']['title'], {'Movie 0', 'Movie 5'})
 
-    def test_no_likes_means_no_match(self):
+    def test_no_likes_falls_back_to_general_appeal(self):
+        """Without likes, the fit is Discover's popularity order, shaped by the mood."""
         from cinecue.demo import taste_match
-        self.assertEqual(taste_match(self.bundle, self.tables, ContextRanker(), [], [1, 2]), {})
+        counts = self.bundle[4]
+        ids = [int(m) for m in self.bundle[1].index]
+        plain = taste_match(self.bundle, self.tables, ContextRanker(), [], ids)
+        self.assertTrue(all(m['basis'] == 'general' and m['closest'] is None for m in plain.values()))
+        top = max((m for m in ids if counts[self.bundle[2].movies.encode([m])[0]] >= 20),
+                  key=lambda m: counts[self.bundle[2].movies.encode([m])[0]])
+        self.assertEqual(plain[top]['rank'], 1)
+        moody = taste_match(self.bundle, self.tables, ContextRanker(), [], ids, mood={'Comedy'})
+        comedy = [m for m in ids if 'Comedy' in self.bundle[1].loc[m, 'genres']]
+        self.assertLess(np.mean([moody[m]['rank'] for m in comedy]), np.mean([plain[m]['rank'] for m in comedy]))
 
     def test_day_pull_is_one_sided(self):
         """Same-day likes can lift a movie's day features but never make them negative."""
