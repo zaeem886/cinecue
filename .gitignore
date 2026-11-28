@@ -26,3 +26,4 @@ data/processed/*
 
 # Prisma CLI (npm install)
 node_modules/
+*.py[cod]
