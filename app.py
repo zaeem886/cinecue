@@ -291,10 +291,13 @@ page_phase = phase("page", page)
 # green for strong matches. No gradients, glows or decorative motion.
 palette = (
     dict(bg="#141414", side="#0e0e0e", surface="#1c1c1c", control="#262626", text="#f2f2f2", muted="#a0a0a0",
-         border="#2c2c2c", accent="#e0262f", accent_soft="rgba(224,38,47,.14)", bar="#333333", good="#46d369")
+         border="#2c2c2c", accent="#e0262f", accent_soft="rgba(224,38,47,.14)", bar="#333333", good="#46d369",
+         lv3="#8bc34a", lv2="#e0b341", lv1="#e8853d", bad="#e5484d", like="#ff4d5a")
     if dark_mode else
+    # Match colours are darker here so they keep at least 4.5:1 contrast on the light background.
     dict(bg="#f4f4f4", side="#ffffff", surface="#ffffff", control="#ebebeb", text="#141414", muted="#5e5e5e",
-         border="#dddddd", accent="#c3161e", accent_soft="rgba(195,22,30,.08)", bar="#e2e2e2", good="#178a3c")
+         border="#dddddd", accent="#c3161e", accent_soft="rgba(195,22,30,.08)", bar="#e2e2e2", good="#12773a",
+         lv3="#4d7c0f", lv2="#935708", lv1="#c2410c", bad="#c42b30", like="#c3161e")
 )
 tokens = ";".join(f"--cue-{name.replace('_', '-')}:{value}" for name, value in palette.items())
 st.markdown(f"<style>:root{{{tokens};color-scheme:{'dark' if dark_mode else 'light'}}}</style>",
@@ -348,6 +351,17 @@ html,body,[data-testid="stApp"],.stApp button,.stApp input {font-family:'Inter',
 [data-baseweb="tag"] {background:var(--cue-bar)!important;color:var(--cue-text);border-radius:3px!important}
 [data-testid="stExpander"] details {background:var(--cue-surface);border:1px solid var(--cue-border);border-radius:6px}
 [data-testid="stExpander"] summary p {font-weight:600}
+/* The base theme in config.toml is light, so Streamlit paints these from light colours unless they are set here:
+   an open expander's header (#f0f0f0), the "Press Enter to …" input hint and the sidebar collapse arrows. */
+[data-testid="stExpander"] summary {background:var(--cue-surface)!important;color:var(--cue-text)!important}
+[data-testid="stExpander"] summary:hover {background:var(--cue-control)!important}
+[data-testid="stExpander"] summary [data-testid="stExpanderIcon"] {color:var(--cue-muted)!important}
+[data-testid="InputInstructions"] {color:var(--cue-muted)!important}
+/* The login and sign-up fields are too narrow for the hint: it covered the password and the show-password eye. */
+[data-testid="stPopoverBody"] [data-testid="InputInstructions"] {display:none}
+[data-testid="stSidebarCollapseButton"] button,[data-testid="stExpandSidebarButton"],
+[data-testid="stSidebarCollapseButton"] [data-testid="stIconMaterial"],
+[data-testid="stExpandSidebarButton"] [data-testid="stIconMaterial"] {color:var(--cue-muted)!important}
 [data-testid="stAlert"],[data-testid="stAlertContainer"] {background:var(--cue-surface)!important;color:var(--cue-text)!important;
   border-radius:6px}
 [data-testid="stAlertContainer"] p,[data-testid="stAlertContainer"] em {color:var(--cue-text)!important}
@@ -484,17 +498,18 @@ html,body,[data-testid="stApp"],.stApp button,.stApp input {font-family:'Inter',
   display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
 .reason b {color:var(--cue-text);font-weight:600}
 [class*="st-key-cuecard"] .stButton button {min-height:2rem;padding:.2rem .4rem;font-size:.8rem}
-[class*="-like-on-"] button {color:#ff4d5a!important}
+[class*="-like-on-"] button {color:var(--cue-like)!important}
 [class*="-btn-on-"] button {color:var(--cue-good)!important}
 
 /* ---------- Taste match ---------- */
-.lv5,.lv4 {--lv:var(--cue-good)} .lv3 {--lv:#8bc34a} .lv2 {--lv:#e0b341} .lv1 {--lv:#e8853d} .lv0 {--lv:#e5484d}
+.lv5,.lv4 {--lv:var(--cue-good)} .lv3 {--lv:var(--cue-lv3)} .lv2 {--lv:var(--cue-lv2)} .lv1 {--lv:var(--cue-lv1)}
+.lv0 {--lv:var(--cue-bad)}
 .match {height:4.1rem;overflow:hidden}
 .match .mv {display:flex;align-items:baseline;gap:.4rem;font-size:.8rem;white-space:nowrap}
 .match .mv b {color:var(--lv);font-weight:700}
 .match .mv .mr {color:var(--cue-text);font-weight:700;font-variant-numeric:tabular-nums}
 .match .shift {font-size:.72rem;color:var(--cue-muted);margin-left:auto}
-.match .shift.up {color:var(--cue-good)} .match .shift.down {color:#e5484d}
+.match .shift.up {color:var(--cue-good)} .match .shift.down {color:var(--cue-bad)}
 .match .meter {display:block;height:3px;margin:.3rem 0;background:var(--cue-bar)}
 .match .meter i {display:block;height:100%;background:var(--lv)}
 .match .mw {font-size:.76rem;color:var(--cue-muted);line-height:1.3;display:-webkit-box;-webkit-line-clamp:2;
