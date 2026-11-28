@@ -1,4 +1,5 @@
 """CineCue website. Run with: python -m streamlit run app.py"""
+from datetime import datetime
 import html
 import json
 from pathlib import Path
@@ -11,10 +12,21 @@ import streamlit as st
 ROOT = Path(__file__).resolve().parent
 sys.path.insert(0, str(ROOT / "src"))
 from cinecue.artifacts import load_bundle, save_bundle  # noqa: E402
+from cinecue.context import DAYPARTS, WEEKDAYS, ContextRanker, daypart  # noqa: E402
 from cinecue.data import table_path  # noqa: E402
-from cinecue.demo import fit_demo, fit_tables, recommend  # noqa: E402
+from cinecue.demo import context_tables, fit_demo, fit_tables, recommend_in_context  # noqa: E402
 from cinecue.first_run import official_tables  # noqa: E402
+from cinecue.likes import load_likes, make_like, save_likes  # noqa: E402
 from cinecue.search import TitleSearch, display_title, label  # noqa: E402
+
+LIKES_FILE = ROOT / "data/likes.json"  # local only; see .gitignore
+PAGES = ["Discover", "Movie library", "Watchlist", "Project results"]
+PAGE_ICONS = {"Discover": ":material/explore:", "Movie library": ":material/video_library:",
+              "Watchlist": ":material/bookmarks:", "Project results": ":material/insights:"}
+DAYPART_ICONS = {0: "☾", 1: "☀", 2: "◐", 3: "☾"}
+# Context weights you choose in Discover. MovieLens showed no measurable gain from any of them
+# (results/context_summary.json), so "Off" equals the validated final ranker.
+LEAN = {"Off": [1.0, 0, 0, 0, 0], "Light": [1.0, 0.5, 0.2, 0.25, 0], "Strong": [1.0, 1.5, 0.5, 0.75, 0]}
 
 st.set_page_config(page_title="CineCue | Movie discovery", page_icon="🎬", layout="wide")
 if toast := st.session_state.pop("toast", None):
@@ -34,18 +46,88 @@ def phase(name, signature):
     return store[name][1]
 
 
-# ---------- Sidebar ----------
+# ---------- Likes and the current moment ----------
 st.session_state.setdefault("watchlist", {})
+if "likes" not in st.session_state:
+    st.session_state.likes = load_likes(LIKES_FILE)
+    st.session_state.likes_rev = 0
+
+
+def set_likes(likes, message=None):
+    """Replace the likes, persist them, and tell widgets that mirror them to refresh."""
+    st.session_state.likes = likes
+    st.session_state.likes_rev += 1
+    save_likes(LIKES_FILE, likes)
+    if message:
+        st.session_state.toast = (message, ":material/favorite:")
+
+
+def moment():
+    """The context recommendations use: the clock, or the day and time picked in the sidebar."""
+    if st.session_state.get("ctx_live", True):
+        now = datetime.now().astimezone()
+        return now.weekday(), daypart(now.hour)
+    return (WEEKDAYS.index(st.session_state.get("ctx_day", WEEKDAYS[0])),
+            DAYPARTS.index(st.session_state.get("ctx_part", DAYPARTS[3])))
+
+
+def toggle_like(movie_id, title):
+    likes = st.session_state.likes
+    if any(like["movie_id"] == movie_id for like in likes):
+        set_likes([like for like in likes if like["movie_id"] != movie_id], f"Removed {label(title)} from your likes")
+    else:
+        weekday, part = moment()
+        set_likes(likes + [make_like(movie_id, weekday=weekday, part=part, title=title)],
+                  f"Liked {label(title)} · {WEEKDAYS[weekday]} {DAYPARTS[part]}")
+
+
+def nav_label(name):
+    count = len(st.session_state.watchlist) if name == "Watchlist" else 0
+    return f"{PAGE_ICONS[name]} {name}" + (f" :primary-badge[{count}]" if count else "")
+
+
+# ---------- Sidebar ----------
+weekday, part = moment()
 with st.sidebar:
-    st.markdown('<div class="brand">Cine<span>Cue.</span><small>Movie picks, with a reason</small></div>',
-                unsafe_allow_html=True)
-    page = st.radio("Explore", ["Discover", "Movie library", "Watchlist", "Project results"],
-                    label_visibility="collapsed", key="page")
-    st.divider()
-    dark_mode = st.toggle("Dark mode", key="dark_mode")
-    saved_count = len(st.session_state.watchlist)
-    st.markdown(f'<div class="badge ph-{phase("watchlist-count", saved_count)}">Watchlist'
-                f'<b>{saved_count}</b></div>', unsafe_allow_html=True)
+    st.markdown('<div class="brand"><span class="logo" aria-hidden="true">C</span><div>Cine<span>Cue.</span>'
+                '<small>Movie picks, with a reason</small></div></div>', unsafe_allow_html=True)
+    st.markdown('<div class="side-label">Browse</div>', unsafe_allow_html=True)
+    page = st.radio("Explore", PAGES, format_func=nav_label, label_visibility="collapsed", key="page")
+
+    st.markdown('<div class="side-label">Right now</div>', unsafe_allow_html=True)
+    with st.container(key="ctxcard"):
+        on_day = sum(like["weekday"] == weekday for like in st.session_state.likes)
+        hint = (f"{on_day} of your likes are from {WEEKDAYS[weekday]}s" if on_day else
+                f"Like a movie and it remembers it was a {WEEKDAYS[weekday]}")
+        st.markdown(f'<div class="ctx-now" title="Likes you make now are stamped with this day and time.">'
+                    f'<span class="ctx-icon">{DAYPART_ICONS[part]}</span><div><b>{WEEKDAYS[weekday]}</b>'
+                    f'<span>{DAYPARTS[part]}</span></div></div><div class="ctx-hint">{hint}</div>',
+                    unsafe_allow_html=True)
+        live = st.toggle("Use my clock", value=True, key="ctx_live",
+                         help="Off: pick a day and time to see how your picks change, e.g. a Monday evening.")
+        if not live:
+            day_col, part_col = st.columns(2)
+            day_col.selectbox("Day", WEEKDAYS, key="ctx_day", label_visibility="collapsed")
+            part_col.selectbox("Time", DAYPARTS, index=3, key="ctx_part", label_visibility="collapsed")
+
+    likes_now = st.session_state.likes
+    st.markdown(f'<div class="side-label">Your likes <b>{len(likes_now)}</b></div>', unsafe_allow_html=True)
+    if likes_now:
+        recent = sorted(likes_now, key=lambda like: like["liked_at"], reverse=True)[:5]
+        st.markdown('<ul class="like-list">' + "".join(
+            f'<li class="{"same" if like["weekday"] == weekday else ""}" '
+            f'title="{html.escape(label(like["title"]) if like["title"] else str(like["movie_id"]))} · liked on a '
+            f'{WEEKDAYS[like["weekday"]]} {DAYPARTS[like["part"]]}"><span class="t">'
+            f'{html.escape(display_title(like["title"])[0] if like["title"] else "Movie " + str(like["movie_id"]))}'
+            f'</span><span class="d">{WEEKDAYS[like["weekday"]][:3]} {DAYPARTS[like["part"]]}</span></li>'
+            for like in recent) + "</ul>"
+            + (f'<div class="ctx-hint">+ {len(likes_now) - 5} more in Discover</div>' if len(likes_now) > 5 else ""),
+            unsafe_allow_html=True)
+    else:
+        st.markdown('<div class="ctx-hint">Tap ♥ on any movie. Each like remembers the day and time.</div>',
+                    unsafe_allow_html=True)
+    st.markdown('<div class="side-gap"></div>', unsafe_allow_html=True)
+    dark_mode = st.toggle(":material/dark_mode: Dark mode", key="dark_mode")
 page_phase = phase("page", page)
 
 # ---------- Theme ----------
@@ -101,9 +183,93 @@ html,body,[data-testid="stApp"] {font-family:'DM Sans',sans-serif}
 [data-testid="stSelectbox"] button,[data-testid="stMultiSelect"] button {background:transparent!important}
 [data-testid="stSelectbox"] svg,[data-testid="stMultiSelect"] svg {fill:var(--cue-text);color:var(--cue-text)}
 [data-testid="stNumberInput"] input,[data-testid="stNumberInput"] button {background:var(--cue-control)!important;color:var(--cue-text)!important}
-.brand {font-size:1.65rem;font-weight:700;letter-spacing:-.05em;padding:.2rem 0 1.2rem;color:var(--cue-text)}
-.brand span {color:var(--cue-accent)}
-.brand small {display:block;font-size:.78rem;font-weight:500;letter-spacing:0;color:var(--cue-muted);margin-top:.15rem}
+/* ---------- Sidebar ---------- */
+[data-testid="stSidebar"] {min-width:300px;max-width:300px}
+[data-testid="stSidebarUserContent"] {padding-top:.2rem}
+[data-testid="stSidebarHeader"] {height:2.6rem;margin-bottom:0}
+/* Streamlit pulls each markdown block up by 1rem; sidebar blocks here carry their own spacing. */
+[data-testid="stSidebar"] [data-testid="stMarkdownContainer"] {margin-bottom:0}
+[data-testid="stSidebar"] [data-testid="stVerticalBlock"] {gap:.55rem}
+.brand {display:flex;align-items:center;gap:.7rem;font-size:1.45rem;font-weight:700;letter-spacing:-.05em;
+  padding:.1rem 0 .9rem;color:var(--cue-text);line-height:1.1}
+.brand > div > span {color:var(--cue-accent)}
+.brand .logo {display:grid;place-items:center;width:2.3rem;height:2.3rem;border-radius:11px;flex-shrink:0;
+  background:linear-gradient(140deg,var(--cue-accent),#0a4d5c);color:#fff;font-size:1.2rem;letter-spacing:0;
+  box-shadow:0 6px 16px -8px var(--cue-accent)}
+.brand small {display:block;font-size:.74rem;font-weight:500;letter-spacing:0;color:var(--cue-muted);margin-top:.2rem}
+.side-label {display:flex;align-items:center;gap:.45rem;font-size:.7rem;font-weight:700;letter-spacing:.1em;
+  text-transform:uppercase;color:var(--cue-muted);margin:.9rem 0 .1rem .1rem}
+.side-label b {font-size:.7rem;padding:0 .4rem;border-radius:99px;background:var(--cue-accent-soft);color:var(--cue-accent)}
+/* Navigation: the radio becomes a list of full-width rows with an accent bar on the active page. */
+[data-testid="stSidebar"] [role="radiogroup"] {gap:.15rem}
+[data-testid="stSidebar"] [role="radiogroup"] label {padding:.5rem .7rem;border-radius:9px;width:100%;margin:0;
+  position:relative;cursor:pointer}
+[data-testid="stSidebar"] [data-testid="stRadioOption"] > div > div:not([data-testid]) {display:none}
+[data-testid="stSidebar"] [data-testid="stRadioOption"] p {font-size:.93rem;font-weight:500;display:flex;align-items:center;gap:.6rem}
+[data-testid="stSidebar"] [data-testid="stRadioOption"] p span[role="img"] {color:var(--cue-muted);font-size:1.2rem}
+[data-testid="stSidebar"] [data-testid="stRadioOption"][data-selected="true"] {background:var(--cue-accent-soft)}
+[data-testid="stSidebar"] [data-testid="stRadioOption"][data-selected="true"] p,
+[data-testid="stSidebar"] [data-testid="stRadioOption"][data-selected="true"] p span[role="img"] {color:var(--cue-accent);font-weight:600}
+[data-testid="stSidebar"] [data-testid="stRadioOption"][data-selected="true"]::before {content:"";position:absolute;left:0;
+  top:22%;bottom:22%;width:3px;border-radius:3px;background:var(--cue-accent)}
+[data-testid="stTooltipIcon"] svg {fill:none!important}
+.st-key-ctxcard {background:var(--cue-control);border:1px solid var(--cue-border);border-radius:12px;padding:.75rem .8rem .55rem;
+  gap:.35rem!important}
+.st-key-ctxcard [data-testid="stMarkdownContainer"] p {margin:0}
+.ctx-now {display:flex;align-items:center;gap:.65rem}
+.ctx-now b {display:block;font-size:1.02rem;line-height:1.2;color:var(--cue-text)}
+.ctx-now span:not(.ctx-icon) {display:block;font-size:.82rem;line-height:1.2;color:var(--cue-muted)}
+.ctx-icon {display:grid;place-items:center;width:2.1rem;height:2.1rem;border-radius:50%;background:var(--cue-accent-soft);
+  color:var(--cue-accent);font-size:1.05rem}
+.ctx-hint {font-size:.78rem;color:var(--cue-muted);margin-top:.45rem;line-height:1.4}
+.like-list {list-style:none;margin:0;padding:0;display:grid;grid-template-columns:minmax(0,1fr);gap:.2rem;width:100%}
+.like-list li {display:flex;justify-content:space-between;align-items:center;gap:.5rem;padding:.32rem .5rem;
+  border-radius:8px;font-size:.83rem;margin:0;min-width:0;max-width:100%;box-sizing:border-box}
+.like-list li:hover {background:var(--cue-control)}
+.like-list .t {flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--cue-text)}
+.like-list .d {flex-shrink:0;font-size:.72rem;color:var(--cue-muted)}
+.like-list li.same .d {color:var(--cue-accent);font-weight:600}
+.like-list li.same .t::before {content:"● ";color:var(--cue-accent);font-size:.6rem;vertical-align:.15em}
+.side-gap {height:.2rem;border-top:1px solid var(--cue-border);margin-top:.8rem}
+
+/* ---------- Discover controls and context banner ---------- */
+.ctl-head {font-size:.72rem;font-weight:700;letter-spacing:.09em;text-transform:uppercase;color:var(--cue-muted);
+  margin:.1rem 0 -.2rem}
+.ctx-banner {display:flex;align-items:center;gap:.8rem;padding:.65rem .85rem;border-radius:11px;
+  background:var(--cue-accent-soft);font-size:.9rem;margin:.1rem 0 .2rem}
+.ctx-banner .ctx-icon {background:var(--cue-surface)}
+.ctx-banner b {color:var(--cue-text)}
+.ctx-banner span.note {color:var(--cue-muted);font-size:.8rem;display:block}
+/* Pills and segmented controls: drawn from the tokens so both themes stay readable. */
+[data-testid="stButtonGroup"] button[data-variant] {background:var(--cue-surface)!important;color:var(--cue-text)!important;
+  border-color:var(--cue-border)!important}
+[data-testid="stButtonGroup"] button[data-variant] * {color:inherit!important}
+[data-testid="stButtonGroup"] button[data-variant][data-selected="true"] {background:var(--cue-accent-soft)!important;
+  color:var(--cue-accent)!important;border-color:var(--cue-accent)!important}
+[data-testid="stButtonGroup"] button[data-variant]:hover:not(:disabled) {border-color:var(--cue-accent)!important;color:var(--cue-accent)!important}
+[data-testid="stButtonGroup"] button[data-variant]:disabled {opacity:.5}
+
+/* ---------- Hover tooltip on movie cards ---------- */
+.poster {outline:none}
+.poster .tip {position:absolute;inset:0;z-index:3;display:flex;flex-direction:column;gap:.4rem;overflow-y:auto;
+  scrollbar-width:none;padding:.75rem .85rem;background:linear-gradient(180deg,rgba(7,12,15,.55) 0%,rgba(7,12,15,.93) 45%);
+  color:#eef4f6;opacity:0;transform:translateY(8px);transition:opacity .22s ease,transform .25s var(--ease-out);
+  pointer-events:none;text-align:left}
+[class*="st-key-cuecard"]:hover .poster .tip {pointer-events:auto}
+[class*="st-key-cuecard"]:hover .poster .tip,.poster:focus-within .tip,.poster:focus .tip {opacity:1;transform:none}
+.tip .tip-title {font-weight:700;font-size:.98rem;line-height:1.25;margin-top:auto} /* bottom-aligned, scrolls if long */
+.tip .tip-title small {font-weight:500;opacity:.7;margin-left:.3rem}
+.tip ul {list-style:none;margin:0;padding:0;display:grid;gap:.3rem}
+.tip li {display:flex;gap:.5rem;align-items:flex-start;font-size:.8rem;line-height:1.35;margin:0}
+.tip li i {font-style:normal;flex-shrink:0;width:1.15rem;height:1.15rem;display:grid;place-items:center;border-radius:5px;
+  background:rgba(255,255,255,.14);font-size:.72rem}
+.tip li.hot i {background:var(--cue-accent);color:#fff}
+.tip li b {color:#fff}
+.poster .lift {position:absolute;left:.7rem;bottom:.6rem;z-index:1;background:var(--cue-accent);color:#fff;border-radius:6px;
+  padding:.1rem .45rem;font-size:.72rem;font-weight:700}
+.poster .liked {position:absolute;right:.7rem;top:.6rem;z-index:1;background:rgba(0,0,0,.42);color:#ff8fa3;border-radius:6px;
+  padding:.05rem .4rem;font-size:.8rem}
+[class*="-like-on-"] button {color:#d6456a;border-color:#d6456a55}
 .hero {padding:.4rem 0 1.1rem}
 .eyebrow {color:var(--cue-accent);font-weight:600;font-size:.8rem;letter-spacing:.08em;text-transform:uppercase}
 .hero h1 {font-size:2.35rem;line-height:1.1;font-weight:700;letter-spacing:-.04em;margin:.35rem 0 .5rem;padding:0}
@@ -260,6 +426,47 @@ def section(title, note=""):
                 unsafe_allow_html=True)
 
 
+def because_text(movie):
+    """'Because you liked <b>Inside Man</b> on a Monday evening, like now · shares Crime' (html, plain)."""
+    shared = movie.get("shared") or []
+    when = f" {movie['because_when']}" if movie.get("because_when") else ""
+    tail = f" · shares {', '.join(shared)}" if shared else ""
+    plain = f"Because you liked {label(movie['because'])}{when}{tail}"
+    rich = f"Because you liked <b>{html.escape(label(movie['because']))}</b>{html.escape(when + tail)}"
+    return rich, plain
+
+
+def tooltip_html(movie, name, year, genres):
+    """Hover/focus panel over the poster: every signal behind the card, as short text lines."""
+    lines = []
+    if movie.get("prediction") is not None:
+        lines.append(("★", f"<b>{movie['prediction']:.1f}</b> stars predicted for you", False))
+    if movie.get("moved", 0) > 0 and movie.get("context"):
+        lines.append(("↑", f"Up <b>{movie['moved']}</b> place{'s' if movie['moved'] != 1 else ''} for "
+                            f"{html.escape(movie['context'])}", True))
+    if movie.get("because"):
+        lines.append(("♥", because_text(movie)[0], bool(movie.get("because_when", "")
+                                                          and "like now" in movie["because_when"])))
+    if movie.get("context_tags"):
+        lines.append(("◷", "Lifted by your <b>" + html.escape(", ".join(movie["context_tags"])) + "</b>", True))
+    if movie.get("mood_match"):
+        lines.append(("◎", f"Matches your mood: <b>{html.escape(', '.join(movie['mood_match']))}</b>", True))
+    if movie.get("ratings"):
+        lines.append(("☰", f"{movie['ratings']:,} MovieLens ratings", False))
+    if movie.get("movie_id") is not None and int(movie["movie_id"]) in liked_ids():
+        lines.append(("♥", "In your likes", False))
+    if not lines:
+        lines.append(("☰", html.escape(" · ".join(genres) or "Movie"), False))
+    items = "".join(f'<li class="{"hot" if hot else ""}"><i>{icon}</i><span>{text}</span></li>'
+                    for icon, text, hot in lines)
+    return (f'<div class="tip" role="tooltip"><div class="tip-title">{html.escape(name)}'
+            f'{f"<small>{year}</small>" if year else ""}</div><ul>{items}</ul></div>')
+
+
+def liked_ids():
+    return {like["movie_id"] for like in st.session_state.likes}
+
+
 def card_html(movie, explanations, rank=None):
     name, year = display_title(movie["title"])
     genres = [g for g in str(movie["genres"]).split("|") if g]
@@ -268,14 +475,20 @@ def card_html(movie, explanations, rank=None):
     initials = "".join(word[0] for word in re.findall(r"[A-Za-z0-9]+", name)[:2]).upper() or "C"
     badge = (f'<span class="year">{year}</span>' if year else "") + \
         (f'<span class="rank" title="Rank in this list">#{rank}</span>' if rank else "")
+    if movie.get("moved", 0) > 0 and movie.get("context"):
+        badge += f'<span class="lift">↑{movie["moved"]}</span>'
+    if movie.get("movie_id") is not None and int(movie["movie_id"]) in liked_ids():
+        badge += '<span class="liked">♥</span>'
+    tip = tooltip_html(movie, name, year, genres)
     url = poster_url(movie.get("movie_id"))
     if url:
-        poster = (f'<div class="poster has-img">{badge}<img class="bg" src="{url}" alt="" aria-hidden="true" '
-                  f'loading="lazy"><img class="fg" src="{url}" alt="Poster: {html.escape(name)}" loading="lazy"></div>')
+        poster = (f'<div class="poster has-img" tabindex="0">{badge}<img class="bg" src="{url}" alt="" aria-hidden="true" '
+                  f'loading="lazy"><img class="fg" src="{url}" alt="Poster: {html.escape(name)}" loading="lazy">'
+                  f'{tip}</div>')
     else:
-        poster = (f'<div class="poster" aria-hidden="true" style="background:linear-gradient(140deg,{color} 10%,'
-                  f'{second} 115%)">{badge}<span class="mark">{html.escape(initials)}</span>'
-                  f'<span class="genre">{html.escape(genres[0] if genres else "Movie")}</span></div>')
+        poster = (f'<div class="poster" tabindex="0" style="background:linear-gradient(140deg,{color} 10%,'
+                  f'{second} 115%)">{badge}<span class="mark" aria-hidden="true">{html.escape(initials)}</span>'
+                  f'<span class="genre">{html.escape(genres[0] if genres else "Movie")}</span>{tip}</div>')
     parts = [
         poster,
         f'<div class="movie-title" title="{html.escape(name)}">{html.escape(name)}</div>',
@@ -291,11 +504,10 @@ def card_html(movie, explanations, rank=None):
         parts.append('<div class="score"></div>')  # keeps every card the same height
     if explanations:
         if movie.get("because"):
-            shared = movie.get("shared") or []
-            plain = f"Because you liked {label(movie['because'])}" + (f" · shares {', '.join(shared)}" if shared else "")
-            text = f"Because you liked <b>{html.escape(label(movie['because']))}</b>"
-            if shared:
-                text += f" · shares {html.escape(', '.join(shared))}"
+            text, plain = because_text(movie)
+        elif movie.get("mood_match"):
+            plain = f"Matches your mood: {', '.join(movie['mood_match'])}"
+            text = html.escape(plain)
         else:
             plain = (movie.get("reason") or "Suggested from your ratings").rstrip(".")
             text = html.escape(plain)
@@ -320,8 +532,18 @@ def cards(rows, prefix, explanations=True, ranked=False,
                 rank = start + offset + 1 if ranked else None
                 st.markdown(card_html(movie, explanations, rank), unsafe_allow_html=True)
                 saved = key in st.session_state.watchlist
-                if st.button("✓ Saved — remove" if saved else "＋ Save to watchlist",
-                             key=f"{prefix}-btn-{'on' if saved else 'off'}-{key}", width="stretch"):
+                movie_id = movie.get("movie_id")
+                liked = movie_id is not None and int(movie_id) in liked_ids()
+                like_col, save_col = st.columns([1, 2], gap="small")
+                if movie_id is not None and like_col.button(
+                        "♥ Liked" if liked else "♡ Like", key=f"{prefix}-like-{'on' if liked else 'off'}-{key}",
+                        width="stretch", help="Unlike" if liked else
+                        f"Like it now. CineCue remembers it was a {WEEKDAYS[weekday]} {DAYPARTS[part]}."):
+                    toggle_like(int(movie_id), movie["title"])
+                    st.rerun()
+                if save_col.button("✓ Saved" if saved else "＋ Watchlist",
+                                   key=f"{prefix}-btn-{'on' if saved else 'off'}-{key}", width="stretch",
+                                   help="Remove from your watchlist" if saved else "Save to your watchlist"):
                     name = label(movie["title"])
                     if saved:
                         del st.session_state.watchlist[key]
@@ -339,6 +561,7 @@ processed = next((p for p in [ROOT / "results", ROOT / "data/processed"]
                   if all(table_path(p, n).is_file() for n in required)), None)
 large_artifact = ROOT / "artifacts/recommender-32m.pkl"  # built by scripts/build_app_catalog.py
 artifact = ROOT / "artifacts/recommender.pkl"
+
 active_artifact = large_artifact if large_artifact.is_file() else artifact
 posters_file = ROOT / "results/posters.csv"  # built by scripts/fetch_posters.py
 
@@ -383,6 +606,13 @@ def models(signature):
 def summary(name):
     path = next((p / name for p in [ROOT / "results", ROOT / "data/processed"] if (p / name).is_file()), None)
     return json.loads(path.read_text(encoding="utf-8")) if path else None
+
+
+@st.cache_resource(show_spinner=False)
+def context_model(signature, _catalog):
+    """Genre matrix and weekday genre table for the loaded catalog (built by scripts/evaluate_context.py)."""
+    found = summary("context_summary.json")
+    return context_tables(_catalog, found), found
 
 
 # ---------- Pages ----------
@@ -458,6 +688,34 @@ elif page == "Project results":
                  f"**{held['selected']['ndcg']:.3f}** against {held['popularity_ndcg']:.3f} for popularity "
                  f"({held['tuning_users']:,} users), with EASE penalty {held['selected']['ease_reg']:,} and blend "
                  f"weight {held['selected']['alpha']}. This is a sanity check, not a second study.")
+    context = summary("context_summary.json")
+    if context:
+        section("Does the day of the week matter?", f"{context['events']['test']:,} test user-days, "
+                                                     f"{context['events']['test_users']:,} users")
+        st.write("A context re-ranker was trained on the validation period to use when a like happened: likes "
+                 "from the same weekday or time of day, and how a user's genres shift on that weekday. It "
+                 "was then checked once on the test period. Every gain is a paired bootstrap 95% interval "
+                 "against the final ranker.")
+        names = {"+ same weekday": "Same-weekday likes", "+ same daypart": "Same time-of-day likes",
+                 "+ weekday genres (user)": "Your genres on this weekday",
+                 "+ weekday genres (everyone)": "Everyone's genres on this weekday", "all context": "All context signals"}
+        body = "".join(
+            f'<tr style="--i:{i}"><th scope="row">{html.escape(names[v["variant"]])}</th>'
+            f'<td>{v["validation_cv_ndcg"]:.4f}</td><td>{v["test_ndcg"]:.4f}</td>'
+            f'<td>{v["vs_final_difference"]:+.4f}</td>'
+            f'<td>[{v["vs_final_ci_low"]:+.4f}, {v["vs_final_ci_high"]:+.4f}]</td></tr>'
+            for i, v in enumerate(r for r in context["variants"] if r["variant"] in names))
+        base = next(r for r in context["variants"] if r["variant"] == "final ranker")
+        st.markdown(f'<div class="tbl-wrap ph-{page_phase}"><table class="tbl"><thead><tr><th>Signal added</th>'
+                    f'<th>Validation NDCG@10</th><th>Test NDCG@10</th><th>Gain</th><th>95% interval</th></tr></thead>'
+                    f'<tbody><tr class="final"><th scope="row">Final ranker (no context)</th>'
+                    f'<td>{base["validation_cv_ndcg"]:.4f}</td><td>{base["test_ndcg"]:.4f}</td><td>—</td><td>—</td></tr>'
+                    f"{body}</tbody></table></div>", unsafe_allow_html=True)
+        st.write("**No context signal helped.** Every interval includes zero or sits below it, so the validated "
+                 "ranker uses none. MovieLens timestamps record when people *rated*, in UTC, often many movies "
+                 "in one sitting, not when they watched. In Discover, *Lean on this day's likes* is therefore your "
+                 "preference, and the likes this website records with their real local time are the data a "
+                 "future test would need.")
     section("How your list is made")
     st.write("**EASE** learns which movies appear together in rating histories. **Matrix factorization** "
              "learns patterns in star ratings. CineCue blends both scores, skips movies you already rated "
@@ -486,16 +744,18 @@ else:
     dataset = settings.get("dataset", "MovieLens 1M")
     st.sidebar.caption(f"Catalog: {dataset} · {len(catalog):,} movies · {int(years.min())}–{int(years.max())}")
     titles = catalog.title.to_dict()
-    genres = sorted({g for value in catalog.genres for g in str(value).split("|")})
+    genres = sorted({g for value in catalog.genres for g in str(value).split("|") if g})
 
     if page == "Movie library":
         hero("Movie library", "Find an old favorite.",
              f"Browse {len(catalog):,} movies. Search a title, filter by genre, and save anything for later.")
-        left, right = st.columns([2, 1])
-        query = left.text_input("Search movies", placeholder="Title, words or year, e.g. dark knight 2008",
-                                help="Every word must appear in the title, in any order. Accents and punctuation "
-                                     "are ignored. Press Enter to search.")
-        selected = right.multiselect("Genres", genres)
+        query = st.text_input("Search movies", placeholder="Title, words or year, e.g. inside man 2006",
+                              icon=":material/search:",
+                              help="Every word must appear in the title, in any order. Accents and punctuation "
+                                   "are ignored. Press Enter to search.")
+        selected = st.pills("Genres", genres, selection_mode="multi", key="library_genres") or []
+        st.caption("Hover a poster for details. ♡ Like stamps the movie with "
+                   f"{WEEKDAYS[weekday]} {DAYPARTS[part]}.")
         records = catalog.assign(ratings=counts).rename_axis("movie_id").reset_index()[["movie_id", "title", "genres", "ratings"]]
         by_id = {int(r["movie_id"]): r for r in records.to_dict("records")}
         ranked, fuzzy = title_search(signature, catalog)(query, {m: r["ratings"] for m, r in by_id.items()})
@@ -520,28 +780,119 @@ else:
                     f'<span class="stat">Films from <b>{int(years.min())}</b> to <b>{int(years.max())}</b></span>'
                     f'<span class="stat"><b>{sum(poster_url(m) is not None for m in catalog.index):,}</b> posters</span></div>',
                     unsafe_allow_html=True)
+        tables, context_summary = context_model(signature, catalog)
+        likes = [like for like in st.session_state.likes if like["movie_id"] in titles]
+        when = f"{WEEKDAYS[weekday]} {DAYPARTS[part]}"
         with st.container(border=True, key="controls"):
-            mode = st.radio("Start from", ["My favorites", "MovieLens profile"], horizontal=True)
-            liked, user = None, None
-            if mode == "My favorites":
-                liked = st.multiselect("Movies you love", sorted(titles, key=lambda m: label(titles[m])),
-                                       format_func=lambda m: label(titles[m]), key="favorites",
-                                       placeholder="Start typing a title, e.g. The Matrix")
+            st.markdown('<div class="ctl-head">Your taste</div>', unsafe_allow_html=True)
+            mode = st.segmented_control("Start from", [":material/favorite: My likes", ":material/person: MovieLens profile"],
+                                        default=":material/favorite: My likes", key="start_from",
+                                        label_visibility="collapsed") or ":material/favorite: My likes"
+            user = None
+            if mode.endswith("My likes"):
+                # The picker mirrors the likes, which card hearts and the editor below also change.
+                # Streamlit drops a widget's state on pages that do not draw it, so the picker is
+                # re-seeded from the likes whenever its state is missing or stale, and only a real
+                # edit (the on_change callback) ever changes the likes.
+                if "fav_select" not in st.session_state or \
+                        st.session_state.get("fav_rev") != st.session_state.likes_rev:
+                    st.session_state.fav_select = [like["movie_id"] for like in likes]
+                    st.session_state.fav_rev = st.session_state.likes_rev
+
+                def picked_changed(titles=titles, weekday=weekday, part=part):
+                    picked = st.session_state.fav_select
+                    current = {like["movie_id"] for like in st.session_state.likes}
+                    kept = [like for like in st.session_state.likes if like["movie_id"] in picked
+                            or like["movie_id"] not in titles]
+                    added = [make_like(m, weekday=weekday, part=part, title=titles[m])
+                             for m in picked if m not in current]
+                    set_likes(kept + added)
+                    st.session_state.fav_rev = st.session_state.likes_rev
+
+                st.multiselect(
+                    "Movies you love", sorted(titles, key=lambda m: label(titles[m])),
+                    format_func=lambda m: label(titles[m]), key="fav_select", on_change=picked_changed,
+                    # "contains" + no select-all: Enter adds the one highlighted title, never every fuzzy match.
+                    filter_mode="contains", select_all=False,
+                    placeholder="Start typing a title, e.g. Inside Man",
+                    help=f"Each movie you add is stamped with the moment: right now that's {when}.")
+                if likes:
+                    with st.expander(f"When you liked them · {len(likes)}", icon=":material/schedule:"):
+                        st.caption("Each like keeps the day and time it happened. Change them here to try, "
+                                   "for example, \"I liked Inside Man on a Monday\".")
+                        frame = pd.DataFrame({"movie_id": [like["movie_id"] for like in likes],
+                                              "Movie": [label(titles[like["movie_id"]]) for like in likes],
+                                              "Day": [WEEKDAYS[like["weekday"]] for like in likes],
+                                              "Time of day": [DAYPARTS[like["part"]] for like in likes]})
+                        edited = st.data_editor(
+                            frame, hide_index=True, width="stretch", key=f"likes_editor_{st.session_state.likes_rev}",
+                            column_order=["Movie", "Day", "Time of day"], disabled=["Movie"],
+                            column_config={"Day": st.column_config.SelectboxColumn("Day", options=list(WEEKDAYS),
+                                                                                   required=True),
+                                           "Time of day": st.column_config.SelectboxColumn(
+                                               "Time of day", options=list(DAYPARTS), required=True)})
+                        changes = {int(m): (WEEKDAYS.index(day), DAYPARTS.index(tod))
+                                   for m, day, tod, day0, tod0 in zip(edited.movie_id, edited["Day"],
+                                                                      edited["Time of day"], frame["Day"],
+                                                                      frame["Time of day"])
+                                   if (day, tod) != (day0, tod0)}
+                        if changes:
+                            set_likes([like | ({"weekday": changes[like["movie_id"]][0],
+                                                "part": changes[like["movie_id"]][1]}
+                                               if like["movie_id"] in changes else {})
+                                       for like in st.session_state.likes])
+                            st.rerun()
             else:
-                user = st.selectbox("MovieLens user", sorted(history.user_id.unique().tolist()))
-            left, middle, right = st.columns(3)
-            count = left.selectbox("Number of picks", [6, 12, 18], index=1)
-            discover = middle.toggle("Discover less popular films", disabled=user is None and not liked)
+                user = st.selectbox("MovieLens user", sorted(history.user_id.unique().tolist()),
+                                    help="MovieLens profiles carry no like times here, so only the mood applies.")
+
+            st.markdown('<div class="ctl-head">Tonight</div>', unsafe_allow_html=True)
+            mood = st.pills("In the mood for", genres, selection_mode="multi", key="mood",
+                            help="Genres you are in the mood for. They are boosted on top of your taste.")
+            mood_col, lean_col, count_col = st.columns([1.1, 1.1, 0.8])
+            strength = mood_col.segmented_control(
+                "Mood strength", ["Nudge", "Strong", "Only these"], default="Strong", key="mood_strength",
+                disabled=not mood, help="Nudge: a light boost. Strong: mood genres lead. Only these: nothing else.")
+            lean = lean_col.segmented_control(
+                f"Lean on {WEEKDAYS[weekday]} likes", list(LEAN), default="Strong", key="ctx_lean",
+                disabled=user is not None,
+                help=f"How much likes made on a {WEEKDAYS[weekday]} (and in the {DAYPARTS[part]}) count right now. "
+                     "Your preference: on MovieLens data this signal showed no measurable gain (see Project results).")
+            count = count_col.segmented_control("Picks", [6, 12, 18], default=12, key="pick_count") or 12
+            left, right = st.columns(2)
+            discover = left.toggle("Discover less popular films", disabled=user is None and not likes)
             explanations = right.toggle("Show why", value=True)
-        rows = recommend(bundle, user, count, discover, liked_movies=liked)
-        personal = user is not None or bool(liked)
+
+        lean = lean or "Off"
+        ranker = ContextRanker(LEAN[lean] if user is None else LEAN["Off"])
+        strength_key = {"Nudge": "nudge", "Strong": "strong", "Only these": "only"}.get(strength or "Strong")
+        rows = recommend_in_context(bundle, tables, ranker, likes=None if user is not None else likes,
+                                    user_id=user, k=count, discover=discover, weekday=weekday, part=part,
+                                    mood=set(mood or []), mood_strength=strength_key)
+        on_day = sum(like["weekday"] == weekday for like in likes)
+        if user is None and likes:
+            if lean != "Off" and on_day:
+                text = (f"<b>{on_day} of your {len(likes)} likes</b> are from {WEEKDAYS[weekday]}s, so they "
+                        f"count extra right now ({lean.lower()}).")
+            elif lean != "Off":
+                text = (f"None of your likes are from a {WEEKDAYS[weekday]} yet, so the day changes nothing. "
+                        f"Like something now, or set a like's day under <i>When you liked them</i>.")
+            else:
+                text = "Day weighting is off: every like counts the same, whatever the day."
+            note = ("Day weighting is your preference. On MovieLens 1M it gave no measurable gain in "
+                    "top-10 accuracy.") if lean != "Off" else ""
+            st.markdown(f'<div class="ctx-banner"><span class="ctx-icon">{DAYPART_ICONS[part]}</span><div>'
+                        f'It\'s <b>{when}</b>. {text}<span class="note">{note}</span></div></div>',
+                        unsafe_allow_html=True)
+        personal = user is not None or bool(likes)
+        mood_note = f" · mood: {', '.join(mood)}" if mood else ""
         if personal:
-            basis = f"MovieLens user {user}" if user is not None else \
-                f"{len(liked)} favorite{'s' if len(liked) != 1 else ''}"
-            section("Picked for you", f"Based on {basis}" + (" · discovery on" if discover else ""))
+            basis = f"MovieLens user {user}" if user is not None else f"{len(likes)} like{'s' if len(likes) != 1 else ''}"
+            section("Picked for you", f"Based on {basis}{mood_note}" + (" · discovery on" if discover else ""))
         else:
-            section("Popular in the community", "Add a favorite to personalise")
-        cards(rows, "recommendation", explanations, ranked=True)
+            section("Popular in the community", "Like a movie to personalise" + mood_note)
+        cards(rows, "recommendation", explanations, ranked=True,
+              empty="No movies fit this mood. Try Nudge or Strong instead of Only these.")
 
 st.markdown('<div class="footer">CineCue · Movie discovery, with a reason · Data: MovieLens 1M, GroupLens Research '
             '(Harper &amp; Konstan, 2015) · Posters: Wikipedia</div>', unsafe_allow_html=True)
