@@ -266,6 +266,26 @@ html,body,[data-testid="stApp"] {font-family:'DM Sans',sans-serif}
 [data-testid="stButtonGroup"] button[data-variant]:hover:not(:disabled) {border-color:var(--cue-accent)!important;color:var(--cue-accent)!important}
 [data-testid="stButtonGroup"] button[data-variant]:disabled {opacity:.5}
 
+/* ---------- Card grid: wrap instead of squeezing cards in narrow windows ---------- */
+[data-testid="stHorizontalBlock"]:has(> [data-testid="stColumn"] [class*="st-key-cuecard"]) {flex-wrap:wrap!important;
+  row-gap:1rem}
+[data-testid="stColumn"]:has([class*="st-key-cuecard"]) {flex:1 1 250px!important;min-width:min(100%,250px)!important;
+  max-width:440px}
+
+/* ---------- Discover search bar ---------- */
+.st-key-hero_search {margin:.1rem 0 .3rem;gap:.35rem!important}
+.st-key-hero_search [data-baseweb="input"],.st-key-hero_search [data-baseweb="base-input"] {border-radius:14px!important}
+.st-key-hero_search [data-testid="stTextInputRootElement"] {height:3.6rem;border-radius:14px;
+  border:2px solid var(--cue-accent)!important;background:var(--cue-surface)!important;
+  box-shadow:0 10px 28px -16px var(--cue-accent);transition:box-shadow .2s ease,transform .2s ease}
+.st-key-hero_search [data-testid="stTextInputRootElement"]:focus-within {box-shadow:0 0 0 4px var(--cue-accent-soft),
+  0 12px 30px -14px var(--cue-accent)}
+.st-key-hero_search input {font-size:1.08rem!important;background:var(--cue-surface)!important}
+.st-key-hero_search [data-testid="stTextInputRootElement"] [data-testid="stIconMaterial"] {color:var(--cue-accent);
+  font-size:1.5rem}
+.hero-search-hint {font-size:.82rem;color:var(--cue-muted);padding-left:.3rem}
+.hero-search-hint b {color:var(--cue-text);font-weight:600}
+
 /* ---------- Taste match (Search, library) ---------- */
 .lv5,.lv4 {--lv:var(--cue-accent)} .lv3 {--lv:#3f9b8f} .lv2 {--lv:#c08a1e} .lv1 {--lv:#d0702c} .lv0 {--lv:#c2484a}
 .match {border-radius:10px;padding:.55rem .7rem;margin-bottom:.6rem;height:7.3rem;box-sizing:border-box;overflow:hidden;
@@ -528,7 +548,15 @@ def match_html(m):
                 '<div class="mv"><b>In your likes</b></div><div class="mw">You liked this one, so it shapes '
                 'every match.</div></div>')
     direction, shift = usual_shift(m)
-    if m["closest"]:
+    if m.get("basis") == "general":
+        why = "No likes yet, so this uses general appeal"
+        if m["mood_match"]:
+            why += f" · in your mood: {html.escape(', '.join(m['mood_match']))}"
+        elif m["mood_miss"]:
+            why += " · outside your mood"
+        if not (m["mood_match"] or m["mood_miss"]):  # no mood: today equals usual, so point to likes instead
+            direction, shift = "same", "♡ like to personalise"
+    elif m["closest"]:
         closest = m["closest"]
         why = f"Closest to <b>{html.escape(display_title(closest['title'])[0])}</b>"
         if closest["shared"]:
@@ -555,6 +583,9 @@ def match_lines(m):
     if direction != "same":
         lines.append(("↕", f"Usually #{m['usual_rank']:,}. Today's day weighting and mood move it "
                            f"<b>{'up' if direction == 'up' else 'down'}</b>", direction == "up"))
+    if m.get("basis") == "general":
+        lines.append(("♡", "No likes yet: ranked by general appeal and your mood. <b>Like a few movies</b> "
+                           "to see how close it is to your own taste", False))
     if m["closest"]:
         c = m["closest"]
         shared = f" · shares {html.escape(', '.join(c['shared']))}" if c["shared"] else ""
@@ -562,7 +593,8 @@ def match_lines(m):
                            f"{html.escape(c['when'])}{shared}", "like now" in c["when"]))
     if m["furthest"]:
         lines.append(("✕", f"Pushed away by <b>{html.escape(label(m['furthest']['title']))}</b>", False))
-    lines.append(("☷", f"Shares a genre with <b>{m['sharing_likes']}</b> of your {m['total_likes']} likes", False))
+    if m["total_likes"]:
+        lines.append(("☷", f"Shares a genre with <b>{m['sharing_likes']}</b> of your {m['total_likes']} likes", False))
     if m["mood_match"]:
         lines.append(("✓", f"In your mood: <b>{html.escape(', '.join(m['mood_match']))}</b>", True))
     elif m["mood_miss"]:
@@ -579,9 +611,13 @@ def current_taste():
             get("ctx_lean") or "Off")
 
 
-def with_match(rows, bundle, tables, likes):
-    """Attach today's taste match to movie rows (no-op without likes)."""
-    if not likes or not rows:
+def with_match(rows, bundle, tables, likes, general=False):
+    """Attach today's taste match to movie rows.
+
+    Without likes it is a no-op unless `general` is set, in which case the fit uses general
+    appeal and the mood (what Discover shows before you like anything).
+    """
+    if not rows or (not likes and not general):
         return rows
     mood, strength, lean = current_taste()
     found = taste_match(bundle, tables, ContextRanker(LEAN[lean]), likes, [int(r["movie_id"]) for r in rows],
@@ -681,14 +717,14 @@ def cards(rows, prefix, explanations=True, ranked=False,
                 saved = key in st.session_state.watchlist
                 movie_id = movie.get("movie_id")
                 liked = movie_id is not None and int(movie_id) in liked_ids()
-                like_col, save_col = st.columns([1, 2], gap="small")
+                like_col, save_col = st.columns(2, gap="small")
                 if movie_id is not None and like_col.button(
                         "♥ Liked" if liked else "♡ Like", key=f"{prefix}-like-{'on' if liked else 'off'}-{key}",
                         width="stretch", help="Unlike" if liked else
                         f"Like it now. CineCue remembers it was a {WEEKDAYS[weekday]} {DAYPARTS[part]}."):
                     toggle_like(int(movie_id), movie["title"])
                     st.rerun()
-                if save_col.button("✓ Saved" if saved else "＋ Watchlist",
+                if save_col.button("✓ Saved" if saved else "＋ Save",
                                    key=f"{prefix}-btn-{'on' if saved else 'off'}-{key}", width="stretch",
                                    help="Remove from your watchlist" if saved else "Save to your watchlist"):
                     name = label(movie["title"])
@@ -942,9 +978,12 @@ else:
              f"Search any movie and see how close it is to your taste this {when_now}: "
              "your likes, the day, and your mood.")
         restore("search_query")
-        query = st.text_input("Search any movie", key="search_query", icon=":material/search:",
-                              placeholder="Title, words or year, e.g. heat 1995",
-                              help="Every word must appear in the title, in any order. Press Enter to search.")
+        with st.container(key="hero_search"):
+            query = st.text_input("Search any movie", key="search_query", icon=":material/search:",
+                                  label_visibility="collapsed",
+                                  placeholder="Title, words or year, e.g. heat 1995")
+            st.markdown('<div class="hero-search-hint">Every word must appear in the title, in any order. '
+                        'Press Enter to search.</div>', unsafe_allow_html=True)
         keep("search_query")
         mood, strength, lean = current_taste()
         on_day = sum(like["weekday"] == weekday for like in likes)
@@ -960,11 +999,12 @@ else:
             _, _, _, order_col = taste_controls(genres)
             restore("search_order")
             order_col.segmented_control("Order results by", ["Best title match", "Best fit today"],
-                                        key="search_order", disabled=not likes)
+                                        key="search_order")
             keep("search_order")
         if not likes:
-            st.info("Like a few movies first (♡ on any card, or *Movies you love* in Discover). Every result "
-                    "will then show how well it fits your taste today.", icon=":material/favorite:")
+            st.info("You have no likes yet, so each result's fit uses general appeal and your mood. Like a few "
+                    "movies (♡ on any card, or *Movies you love* in Discover) to see how close each one is to "
+                    "*your* taste today.", icon=":material/favorite:")
         if not query.strip():
             st.markdown('<div class="legend">' + "".join(
                 f'<span class="match-key lv{level}"><i></i>{text}</span>' for level, text in
@@ -978,8 +1018,8 @@ else:
                 ["movie_id", "title", "genres", "ratings"]].set_index("movie_id", drop=False)
             ranked, fuzzy = title_search(signature, catalog)(query, dict(zip(by_id.index, by_id.ratings)))
             hits = [by_id.loc[m].to_dict() for m in ranked[:24]]
-            rows = with_match(hits, bundle, tables, likes)
-            by_fit = likes and st.session_state.get("search_order") == "Best fit today"
+            rows = with_match(hits, bundle, tables, likes, general=True)
+            by_fit = st.session_state.get("search_order") == "Best fit today"
             if by_fit:
                 rows = sorted(rows, key=lambda r: (r["match"] is None, r["match"]["rank"] if r["match"] else 0))
             rows = rows[:12]
@@ -992,6 +1032,21 @@ else:
     else:
         hero("Discover", "Find your next movie.",
              "Pick a few movies you love, or start from a MovieLens profile. Every pick comes with the reason it was chosen.")
+
+        def open_search():
+            """Enter in the Discover search bar opens the Search page with that query."""
+            query = st.session_state.get("discover_search", "").strip()
+            if query:
+                st.session_state.search_query = st.session_state.kept_search_query = query
+                st.session_state.page = "Search"
+                st.session_state.discover_search = ""
+
+        with st.container(key="hero_search"):
+            st.text_input("Search any movie", key="discover_search", on_change=open_search,
+                          icon=":material/search:", label_visibility="collapsed",
+                          placeholder=f"Search any movie and see how it fits your {when_now} taste…")
+            st.markdown('<div class="hero-search-hint">Press Enter to search. Each result shows its rank for your '
+                        'taste today, from <b>Top pick</b> to <b>Not your taste</b>.</div>', unsafe_allow_html=True)
         st.markdown(f'<div class="stats ph-{page_phase}"><span class="stat"><b>{len(catalog):,}</b> movies</span>'
                     f'<span class="stat"><b>{history.user_id.nunique():,}</b> MovieLens profiles</span>'
                     f'<span class="stat"><b>{len(history):,}</b> ratings learned from</span>'
