@@ -1,0 +1,79 @@
+// CineCue user accounts and taste profiles.
+//
+// Prisma owns the schema and the migrations (npm run db:migrate). The Streamlit app is
+// Python, so it does not use a Prisma client: src/cinecue/accounts.py reads and writes
+// these tables with psycopg. Change the schema here, then run `npm run db:migrate:dev`.
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+/// A person who signed up on the website.
+model User {
+  id           Int       @id @default(autoincrement())
+  /// Stored lower-case; used to log in.
+  email        String    @unique
+  displayName  String    @map("display_name")
+  /// scrypt hash with its own salt and parameters; never the password itself.
+  passwordHash String    @map("password_hash")
+  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  lastLoginAt  DateTime? @map("last_login_at") @db.Timestamptz(3)
+
+  likes     Like[]
+  watchlist WatchlistItem[]
+  events    Event[]
+
+  @@map("users")
+}
+
+/// The taste profile: the movies a user liked, each with the moment it happened.
+/// CineCue's context ranker uses the weekday and time of day of every like.
+/// movieId is a MovieLens movie ID, the same IDs the models and posters use.
+model Like {
+  userId  Int      @map("user_id")
+  movieId Int      @map("movie_id")
+  /// Title at the time of the like, for readability in Prisma Studio.
+  title   String   @default("")
+  likedAt DateTime @default(now()) @map("liked_at") @db.Timestamptz(3)
+  /// 0 = Monday ... 6 = Sunday (checked in the migration).
+  weekday Int      @db.SmallInt
+  /// 0 = night, 1 = morning, 2 = afternoon, 3 = evening (checked in the migration).
+  part    Int      @db.SmallInt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([userId, movieId])
+  @@map("likes")
+}
+
+/// Movies a user saved for later.
+model WatchlistItem {
+  userId  Int      @map("user_id")
+  movieId Int      @map("movie_id")
+  /// Title and genres when saved, so the watchlist shows without loading the models.
+  title   String   @default("")
+  genres  String   @default("")
+  addedAt DateTime @default(now()) @map("added_at") @db.Timestamptz(3)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([userId, movieId])
+  @@map("watchlist")
+}
+
+/// Activity log for profiling: sign-ups, logins, ratings, saves, and the lists shown.
+model Event {
+  id        BigInt   @id @default(autoincrement())
+  userId    Int      @map("user_id")
+  /// signup | login | like | unlike | retime | save | unsave
+  kind      String
+  movieId   Int?     @map("movie_id")
+  detail    Json?
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@map("events")
+}

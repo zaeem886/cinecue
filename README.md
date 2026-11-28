@@ -175,6 +175,44 @@ viewing times. The local likes the website now records are the data a future tes
 The explanation toggle changes presentation only. It can support a survey
 demonstration. Survey responses are not collected by the current website.
 
+## Accounts and user profiles (PostgreSQL + Prisma)
+
+Visitors can sign up and log in. A signed-in user's **likes** (each with the weekday and time
+of day it happened, which the context ranker uses), **watchlist** and **activity** are stored in
+PostgreSQL, so they come back on any device. Guests can still browse; their likes and saves last
+for the visit and are added to their account if they log in or sign up. Without a database
+configured, the website works as before and keeps likes in the local `data/likes.json`.
+
+| Table | Contents |
+| --- | --- |
+| `users` | email, display name, scrypt password hash (never the password), sign-up and last-login times |
+| `likes` | the taste profile: one row per liked movie, with when it was liked (weekday, time of day) |
+| `watchlist` | saved movies, with title and genres so the list shows without loading the models |
+| `events` | activity for profiling: sign-ups, logins, likes, re-timed likes, saves and removals |
+
+**Prisma** owns the schema (`prisma/schema.prisma`) and the migrations (`prisma/migrations/`).
+The website is Python, so it reads and writes the same tables with psycopg
+(`src/cinecue/accounts.py`); there is no Prisma client.
+
+Setup, once per machine (needs Node.js and PostgreSQL, e.g. [Postgres.app](https://postgresapp.com)):
+
+```bash
+cp .env.example .env            # then set DATABASE_URL (local or hosted)
+createdb cinecue                # local PostgreSQL only
+npm install                     # the pinned Prisma CLI
+npm run db:migrate              # create or update the tables
+npm run db:studio               # optional: browse users, likes and activity in the browser
+```
+
+To change the schema, edit `prisma/schema.prisma` and run `npm run db:migrate:dev -- --name <change>`,
+then commit the new folder in `prisma/migrations/`. Database tests run against a separate,
+migrated database: `TEST_DATABASE_URL=postgresql://localhost:5432/cinecue_test python -m unittest tests.test_accounts`.
+
+Passwords need at least 8 characters and are stored as salted scrypt hashes; every query is
+parameterised. A login lasts for the browser session, so a page refresh asks again. For a hosted
+website (for example the Hugging Face Space), create a hosted PostgreSQL database, run
+`npm run db:migrate` against it once, and give the server its `DATABASE_URL` as a secret.
+
 ## Checks and troubleshooting
 
 Run the existing model and adapter tests with:
