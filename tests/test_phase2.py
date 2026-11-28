@@ -178,6 +178,15 @@ class EaseTests(unittest.TestCase):
         positions = ease.movies.encode(items[:2])
         np.testing.assert_allclose(ease.score(history)[0], ease.weights[positions].sum(axis=0))
 
+    def test_chunked_fit_matches_one_block_and_float32_storage(self):
+        users, items, _ = low_rank_ratings()
+        whole = EASE(reg=10.0).fit(users, items, chunk_users=10_000)
+        blocks = EASE(reg=10.0).fit(users, items, chunk_users=7)
+        np.testing.assert_array_equal(blocks.weights, whole.weights)
+        small = EASE(reg=10.0).fit(users, items, dtype=np.float32)
+        self.assertEqual(small.weights.dtype, np.float32)
+        np.testing.assert_allclose(small.weights, whole.weights, atol=1e-6)
+
     def test_weights_solve_the_constrained_ridge_problem(self):
         users, items, _ = low_rank_ratings(n_users=30, n_items=8)
         ease = EASE(reg=3.0).fit(users, items)
