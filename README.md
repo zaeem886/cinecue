@@ -156,7 +156,7 @@ the UTC and recency adjustments tested in the notebooks.
 
 ### Does the day of the week matter?
 
-`scripts/evaluate_context.py` trains a context re-ranker on MovieLens 1M. Its signals
+`notebooks/08_context.ipynb` (using the functions of `scripts/evaluate_context.py`) trains a context re-ranker on MovieLens 1M. Its signals
 are likes from the same weekday or time of day, a user's genre shift on that weekday,
 and everyone's weekday genre shift. It learns the feature weights by logistic regression
 on the validation period (5-fold over users). A variant is selected only if its paired
@@ -171,6 +171,8 @@ signals are one-sided and softly capped: likes from the current day pull their n
 but never push other movies down. The validated ranker therefore uses no context. In the website, day weighting is a user preference, labelled as such.
 MovieLens timestamps are UTC rating-submission times, often from one sitting, not
 viewing times. The local likes the website now records are the data a future test needs.
+
+![Context variants on validation and test](figures/phase2_context_variants.png)
 
 The explanation toggle changes presentation only. It can support a survey
 demonstration. Survey responses are not collected by the current website.
@@ -375,6 +377,12 @@ movies have no ratings. Rating activity spans 2000-04-25 23:05:32 UTC to
   Monday has the most submissions, with 173,931. Weekend activity accounts for
   25.36%. These describe submission behavior and cannot establish viewing habits.
 
+Charts from the EDA notebook (all five are in [`figures/`](figures/)):
+
+| | |
+| --- | --- |
+| ![Rating distribution](figures/phase1_rating_distribution.png) | ![Popularity concentration](figures/phase1_popularity_concentration.png) |
+
 ## Features and target
 
 | Field | Role |
@@ -471,7 +479,9 @@ python -m nbconvert --to notebook --execute --inplace --ExecutePreprocessor.time
 python -m nbconvert --to notebook --execute --inplace --ExecutePreprocessor.timeout=1800 --ExecutePreprocessor.kernel_name=python3 notebooks/05_matrix_factorization.ipynb
 python -m nbconvert --to notebook --execute --inplace --ExecutePreprocessor.timeout=1800 --ExecutePreprocessor.kernel_name=python3 notebooks/06_ranking.ipynb
 python -m nbconvert --to notebook --execute --inplace --ExecutePreprocessor.timeout=1800 --ExecutePreprocessor.kernel_name=python3 notebooks/07_explanations.ipynb
+python -m nbconvert --to notebook --execute --inplace --ExecutePreprocessor.timeout=3600 --ExecutePreprocessor.kernel_name=python3 notebooks/08_context.ipynb
 python scripts/verify_phase2.py
+python scripts/export_figures.py   # saves every chart to figures/
 ```
 
 Shared model code lives in `src/cinecue/`. Notebooks add `src/` to the import path, so
@@ -499,6 +509,19 @@ NumPy and pandas only.
   of the final ranker because it lowered test NDCG@10 reliably. That one decision used
   the test split; the final ranker's settings and test result are the same as in the
   first round.
+
+### Results at a glance
+
+All charts are saved in [`figures/`](figures/) by `python scripts/export_figures.py`: the
+charts from notebooks 2–8 plus three summary charts drawn from `results/*.json`.
+
+| | |
+| --- | --- |
+| ![Rating models](figures/phase2_rating_models_rmse.png) | ![Explanation removal test](figures/phase2_explanation_removal_test.png) |
+
+![Top-10 ranking models](figures/phase2_ranking_models.png)
+
+![Accuracy versus exposure of less popular movies](figures/phase2_rerank_tradeoff.png)
 
 ### Rating prediction (notebooks 4 and 5)
 
@@ -591,6 +614,9 @@ cinecue/
     download_data.py
     verify_outputs.py
     verify_phase2.py
+    evaluate_context.py     # context re-ranking experiment (run in notebook 8)
+    export_figures.py       # saves all charts to figures/
+  figures/                  # result charts (PNG), Phase 1 and Phase 2
   src/cinecue/              # Phase 2 models, ranking, explanations
     data.py
     models.py
@@ -607,6 +633,7 @@ cinecue/
     05_matrix_factorization.ipynb
     06_ranking.ipynb
     07_explanations.ipynb
+    08_context.ipynb
   data/
     raw/                    # local download or existing files
     processed/              # local generated tables and summaries
@@ -618,7 +645,8 @@ The processed directory contains `ratings_clean.csv`, `movies_clean.csv`,
 aggregate `cleaning_summary.json`, `eda_summary.json`, and `split_summary.json`.
 Phase 2 adds the aggregate `baseline_summary.json`, `rating_summary.json`,
 `ranking_summary.json`, and `explanation_summary.json`.
-Only directory placeholders are tracked under `data/`. Figures remain inline.
+Only directory placeholders are tracked under `data/`. Charts are shown inline in the notebooks and saved as
+PNG files in `figures/` (`python scripts/export_figures.py`).
 
 Suggested group milestones:
 
