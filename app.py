@@ -14,15 +14,21 @@ sys.path.insert(0, str(ROOT / "src"))
 from cinecue.artifacts import load_bundle, save_bundle  # noqa: E402
 from cinecue.context import DAYPARTS, WEEKDAYS, ContextRanker, daypart  # noqa: E402
 from cinecue.data import table_path  # noqa: E402
-from cinecue.demo import context_tables, fit_demo, fit_tables, recommend_in_context  # noqa: E402
+from cinecue.demo import context_tables, fit_demo, fit_tables, recommend_in_context, taste_match  # noqa: E402
 from cinecue.first_run import official_tables  # noqa: E402
 from cinecue.likes import load_likes, make_like, save_likes  # noqa: E402
 from cinecue.search import TitleSearch, display_title, label  # noqa: E402
 
 LIKES_FILE = ROOT / "data/likes.json"  # local only; see .gitignore
-PAGES = ["Discover", "Movie library", "Watchlist", "Project results"]
-PAGE_ICONS = {"Discover": ":material/explore:", "Movie library": ":material/video_library:",
-              "Watchlist": ":material/bookmarks:", "Project results": ":material/insights:"}
+PAGES = ["Discover", "Search", "Movie library", "Watchlist", "Project results"]
+PAGE_ICONS = {"Discover": ":material/explore:", "Search": ":material/manage_search:",
+              "Movie library": ":material/video_library:", "Watchlist": ":material/bookmarks:",
+              "Project results": ":material/insights:"}
+MOOD_STRENGTHS = {"Nudge": "nudge", "Strong": "strong", "Only these": "only"}
+# Widget values that should survive moving between pages (Streamlit drops the state of widgets
+# a page does not draw). restore() before the widget, keep() after it.
+REMEMBERED = {"mood": [], "mood_strength": "Strong", "ctx_lean": "Strong", "search_query": "",
+              "search_order": "Best title match"}
 DAYPART_ICONS = {0: "☾", 1: "☀", 2: "◐", 3: "☾"}
 # Context weights you choose in Discover. MovieLens showed no measurable gain from any of them
 # (results/context_summary.json), so "Off" equals the validated final ranker.
@@ -62,6 +68,15 @@ def set_likes(likes, message=None):
         st.session_state.toast = (message, ":material/favorite:")
 
 
+def restore(key):
+    if key not in st.session_state:
+        st.session_state[key] = st.session_state.get(f"kept_{key}", REMEMBERED[key])
+
+
+def keep(key):
+    st.session_state[f"kept_{key}"] = st.session_state.get(key)
+
+
 def moment():
     """The context recommendations use: the clock, or the day and time picked in the sidebar."""
     if st.session_state.get("ctx_live", True):
@@ -88,6 +103,7 @@ def nav_label(name):
 
 # ---------- Sidebar ----------
 weekday, part = moment()
+when_now = f"{WEEKDAYS[weekday]} {DAYPARTS[part]}"
 with st.sidebar:
     st.markdown('<div class="brand"><span class="logo" aria-hidden="true">C</span><div>Cine<span>Cue.</span>'
                 '<small>Movie picks, with a reason</small></div></div>', unsafe_allow_html=True)
@@ -248,6 +264,32 @@ html,body,[data-testid="stApp"] {font-family:'DM Sans',sans-serif}
   color:var(--cue-accent)!important;border-color:var(--cue-accent)!important}
 [data-testid="stButtonGroup"] button[data-variant]:hover:not(:disabled) {border-color:var(--cue-accent)!important;color:var(--cue-accent)!important}
 [data-testid="stButtonGroup"] button[data-variant]:disabled {opacity:.5}
+
+/* ---------- Taste match (Search, library) ---------- */
+.lv5,.lv4 {--lv:var(--cue-accent)} .lv3 {--lv:#3f9b8f} .lv2 {--lv:#c08a1e} .lv1 {--lv:#d0702c} .lv0 {--lv:#c2484a}
+.match {border-radius:10px;padding:.55rem .7rem;margin-bottom:.6rem;height:7.3rem;box-sizing:border-box;overflow:hidden;
+  background:color-mix(in srgb,var(--lv) 9%,transparent);border:1px solid color-mix(in srgb,var(--lv) 28%,transparent)}
+.match .mh {display:flex;justify-content:space-between;align-items:baseline;gap:.5rem}
+.match .label {font-size:.68rem;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--lv);
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.match .mr {font-weight:700;font-size:1.02rem;color:var(--cue-text);font-variant-numeric:tabular-nums;white-space:nowrap}
+.match .mr small {font-weight:500;font-size:.72rem;color:var(--cue-muted)}
+.match .meter {display:block;height:6px;margin:.35rem 0 .4rem}
+.match .meter i {background:var(--lv)}
+.match .mv {display:flex;justify-content:space-between;align-items:baseline;gap:.4rem;font-size:.86rem}
+.match .mv b {color:var(--lv)}
+.match .shift {font-size:.74rem;color:var(--cue-muted);white-space:nowrap}
+.match .shift.up {color:var(--cue-accent)} .match .shift.down {color:#c2484a}
+.match .mw {font-size:.8rem;color:var(--cue-muted);margin-top:.2rem;line-height:1.35;
+  display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.match .mw b {color:var(--cue-text)}
+.match .meter i {animation:var(--grow) .9s var(--ease-out) backwards;transform-origin:left}
+.taste-strip {display:flex;flex-wrap:wrap;align-items:center;gap:.5rem;margin:.2rem 0 .7rem}
+.taste-strip .ts-label {font-size:.72rem;font-weight:700;letter-spacing:.09em;text-transform:uppercase;color:var(--cue-muted);
+  margin-right:.2rem}
+.legend {display:flex;flex-wrap:wrap;gap:.45rem .9rem;margin:1.2rem 0 .4rem}
+.match-key {display:inline-flex;align-items:center;gap:.4rem;font-size:.84rem;color:var(--cue-text)}
+.match-key i {width:.75rem;height:.75rem;border-radius:3px;background:var(--lv)}
 
 /* ---------- Hover tooltip on movie cards ---------- */
 .poster {outline:none}
@@ -438,7 +480,7 @@ def because_text(movie):
 
 def tooltip_html(movie, name, year, genres):
     """Hover/focus panel over the poster: every signal behind the card, as short text lines."""
-    lines = []
+    lines = match_lines(movie["match"]) if movie.get("match") else []
     if movie.get("prediction") is not None:
         lines.append(("★", f"<b>{movie['prediction']:.1f}</b> stars predicted for you", False))
     if movie.get("moved", 0) > 0 and movie.get("context"):
@@ -465,6 +507,107 @@ def tooltip_html(movie, name, year, genres):
 
 def liked_ids():
     return {like["movie_id"] for like in st.session_state.likes}
+
+
+def usual_shift(m):
+    """How today's day weighting and mood move the movie compared with your usual taste."""
+    rank, usual = m["rank"], m["usual_rank"]
+    if usual > rank * 1.5 and usual - rank >= 20:
+        return "up", f"↑ usually #{usual:,}"
+    if rank > usual * 1.5 and rank - usual >= 20:
+        return "down", f"↓ usually #{usual:,}"
+    return "same", "about as usual"
+
+
+def match_html(m):
+    """Card panel: today's verdict, rank among comparable movies, a meter, and the main reason."""
+    if m["liked"]:
+        return ('<div class="match lv5"><div class="mh"><span class="label">Your taste today</span>'
+                '<span class="mr">♥</span></div><div class="meter"><i style="width:100%"></i></div>'
+                '<div class="mv"><b>In your likes</b></div><div class="mw">You liked this one, so it shapes '
+                'every match.</div></div>')
+    direction, shift = usual_shift(m)
+    if m["closest"]:
+        closest = m["closest"]
+        why = f"Closest to <b>{html.escape(display_title(closest['title'])[0])}</b>"
+        if closest["shared"]:
+            why += f" · {html.escape(', '.join(closest['shared'][:2]))}"
+    else:
+        why = "Far from all of your likes"
+    if m["mood_miss"] and not m["mood_match"]:
+        why += " · outside your mood"
+    return (f'<div class="match lv{m["level"]}"><div class="mh"><span class="label">Fit for {html.escape(when_now)}</span>'
+            f'<span class="mr" title="Rank among {m["pool"]:,} comparable movies today">#{m["rank"]:,}'
+            f'<small> / {m["pool"]:,}</small></span></div>'
+            f'<div class="meter"><i style="width:{max(m["percent"], 2):.0f}%"></i></div>'
+            f'<div class="mv"><b>{html.escape(m["label"])}</b><span class="shift {direction}">{shift}</span></div>'
+            f'<div class="mw">{why}</div></div>')
+
+
+def match_lines(m):
+    """Tooltip lines for a taste match: verdict, change from usual, what pulls it closer or away."""
+    if m["liked"]:
+        return [("♥", "<b>In your likes</b>", True)]
+    lines = [("◎", f"<b>{html.escape(m['label'])}</b>: #{m['rank']:,} of {m['pool']:,} for your "
+                   f"{html.escape(when_now)} taste, ahead of {m['percent']:.0f}%", m["level"] >= 3)]
+    direction, _ = usual_shift(m)
+    if direction != "same":
+        lines.append(("↕", f"Usually #{m['usual_rank']:,}. Today's day weighting and mood move it "
+                           f"<b>{'up' if direction == 'up' else 'down'}</b>", direction == "up"))
+    if m["closest"]:
+        c = m["closest"]
+        shared = f" · shares {html.escape(', '.join(c['shared']))}" if c["shared"] else ""
+        lines.append(("♥", f"Pulled closer by <b>{html.escape(label(c['title']))}</b>, liked "
+                           f"{html.escape(c['when'])}{shared}", "like now" in c["when"]))
+    if m["furthest"]:
+        lines.append(("✕", f"Pushed away by <b>{html.escape(label(m['furthest']['title']))}</b>", False))
+    lines.append(("☷", f"Shares a genre with <b>{m['sharing_likes']}</b> of your {m['total_likes']} likes", False))
+    if m["mood_match"]:
+        lines.append(("✓", f"In your mood: <b>{html.escape(', '.join(m['mood_match']))}</b>", True))
+    elif m["mood_miss"]:
+        lines.append(("✕", f"Outside your mood ({html.escape(', '.join(m['mood_miss']))})", False))
+    if m["low_data"]:
+        lines.append(("!", "Fewer than 20 ratings, so Discover never shows it", False))
+    return lines
+
+
+def current_taste():
+    """(mood, strength key, lean) as last set in Discover or Search."""
+    get = lambda key: st.session_state.get(f"kept_{key}", REMEMBERED[key])  # noqa: E731
+    return (list(get("mood") or []), MOOD_STRENGTHS.get(get("mood_strength") or "Strong"),
+            get("ctx_lean") or "Off")
+
+
+def with_match(rows, bundle, tables, likes):
+    """Attach today's taste match to movie rows (no-op without likes)."""
+    if not likes or not rows:
+        return rows
+    mood, strength, lean = current_taste()
+    found = taste_match(bundle, tables, ContextRanker(LEAN[lean]), likes, [int(r["movie_id"]) for r in rows],
+                        weekday=weekday, part=part, mood=set(mood), mood_strength=strength)
+    return [r | {"match": found.get(int(r["movie_id"]))} for r in rows]
+
+
+def taste_controls(genres, lean_disabled=False):
+    """Mood genres, mood strength and day weighting, shared by Discover and Search.
+
+    Returns (mood, strength key, lean, third column) so a page can add its own control.
+    """
+    for key in ("mood", "mood_strength", "ctx_lean"):
+        restore(key)
+    mood = st.pills("In the mood for", genres, selection_mode="multi", key="mood",
+                    help="Genres you are in the mood for. They are boosted on top of your taste.") or []
+    mood_col, lean_col, third = st.columns([1.1, 1.1, 0.8])
+    strength = mood_col.segmented_control(
+        "Mood strength", list(MOOD_STRENGTHS), key="mood_strength", disabled=not mood,
+        help="Nudge: a light boost. Strong: mood genres lead. Only these: nothing else.")
+    lean = lean_col.segmented_control(
+        f"Lean on {WEEKDAYS[weekday]} likes", list(LEAN), key="ctx_lean", disabled=lean_disabled,
+        help=f"How much likes made on a {WEEKDAYS[weekday]} (and in the {DAYPARTS[part]}) count right now. "
+             "Your preference: on MovieLens data this signal showed no measurable gain (see Project results).")
+    for key in ("mood", "mood_strength", "ctx_lean"):
+        keep(key)
+    return mood, MOOD_STRENGTHS.get(strength or "Strong"), lean or "Off", third
 
 
 def card_html(movie, explanations, rank=None):
@@ -494,6 +637,9 @@ def card_html(movie, explanations, rank=None):
         f'<div class="movie-title" title="{html.escape(name)}">{html.escape(name)}</div>',
         '<div class="chips">' + "".join(f'<span class="chip">{html.escape(g)}</span>' for g in genres[:4]) + "</div>",
     ]
+    if movie.get("match"):
+        parts.append(match_html(movie["match"]))
+        return "".join(parts)
     if movie.get("prediction") is not None:
         width = max(0.0, min(1.0, (movie["prediction"] - 1) / 4)) * 100
         parts.append(f'<div class="score"><span>Predicted <b>{movie["prediction"]:.1f}★</b></span>'
@@ -768,8 +914,64 @@ else:
         number = pager.number_input("Page", min_value=1, max_value=pages, value=1)
         order = "best matches first" if query.strip() else "most rated first"
         info.caption(f"{len(filtered):,} movies · {order} · page {number} of {pages}")
-        cards(filtered[(number - 1) * 12:number * 12], "catalog", False,
+        likes = [like for like in st.session_state.likes if like["movie_id"] in titles]
+        tables, _ = context_model(signature, catalog)
+        cards(with_match(filtered[(number - 1) * 12:number * 12], bundle, tables, likes), "catalog", False,
               empty="No movies match. Try a shorter search or fewer genres.")
+
+    elif page == "Search":
+        tables, _ = context_model(signature, catalog)
+        likes = [like for like in st.session_state.likes if like["movie_id"] in titles]
+        hero("Search", "Does it fit today?",
+             f"Search any movie and see how close it is to your taste this {when_now}: "
+             "your likes, the day, and your mood.")
+        restore("search_query")
+        query = st.text_input("Search any movie", key="search_query", icon=":material/search:",
+                              placeholder="Title, words or year, e.g. heat 1995",
+                              help="Every word must appear in the title, in any order. Press Enter to search.")
+        keep("search_query")
+        mood, strength, lean = current_taste()
+        on_day = sum(like["weekday"] == weekday for like in likes)
+        chips = [f"◷ <b>{when_now}</b>",
+                 f"♥ <b>{len(likes)}</b> like{'s' if len(likes) != 1 else ''}"
+                 + (f" · {on_day} from {WEEKDAYS[weekday]}s" if on_day else ""),
+                 "◎ Mood: <b>" + (html.escape(", ".join(mood)) if mood else "any") + "</b>"
+                 + (f" ({next(k for k, v in MOOD_STRENGTHS.items() if v == strength).lower()})" if mood else ""),
+                 f"⚖ Day weighting: <b>{lean.lower()}</b>"]
+        st.markdown(f'<div class="taste-strip ph-{page_phase}"><span class="ts-label">Today\'s taste</span>'
+                    + "".join(f'<span class="stat">{c}</span>' for c in chips) + "</div>", unsafe_allow_html=True)
+        with st.expander("Adjust mood and day weighting", icon=":material/tune:"):
+            _, _, _, order_col = taste_controls(genres)
+            restore("search_order")
+            order_col.segmented_control("Order results by", ["Best title match", "Best fit today"],
+                                        key="search_order", disabled=not likes)
+            keep("search_order")
+        if not likes:
+            st.info("Like a few movies first (♡ on any card, or *Movies you love* in Discover). Every result "
+                    "will then show how well it fits your taste today.", icon=":material/favorite:")
+        if not query.strip():
+            st.markdown('<div class="legend">' + "".join(
+                f'<span class="match-key lv{level}"><i></i>{text}</span>' for level, text in
+                [(5, "Top pick today · top 12"), (4, "Excellent · top 100"), (3, "Strong · top 500"),
+                 (2, "Good · top 1,500"), (1, "Mixed · top 4,000"), (0, "Not your taste today")]) + "</div>",
+                unsafe_allow_html=True)
+            st.caption("Ranks compare a movie with every movie that has 20+ ratings, scored the way Discover "
+                       "scores them right now. Hover a poster to see what pulls it closer or pushes it away.")
+        else:
+            by_id = catalog.assign(ratings=counts).rename_axis("movie_id").reset_index()[
+                ["movie_id", "title", "genres", "ratings"]].set_index("movie_id", drop=False)
+            ranked, fuzzy = title_search(signature, catalog)(query, dict(zip(by_id.index, by_id.ratings)))
+            hits = [by_id.loc[m].to_dict() for m in ranked[:24]]
+            rows = with_match(hits, bundle, tables, likes)
+            by_fit = likes and st.session_state.get("search_order") == "Best fit today"
+            if by_fit:
+                rows = sorted(rows, key=lambda r: (r["match"] is None, r["match"]["rank"] if r["match"] else 0))
+            rows = rows[:12]
+            note = "closest spellings" if fuzzy else f"{len(ranked):,} title{'s' if len(ranked) != 1 else ''} match"
+            section(f"Results for “{query.strip()}”",
+                    note + (f" · showing {len(rows)}" if len(ranked) > len(rows) else "")
+                    + (" · best fit today first" if by_fit else ""))
+            cards(rows, "search", False, empty="No titles match. Try fewer or shorter words.")
 
     else:
         hero("Discover", "Find your next movie.",
@@ -847,25 +1049,13 @@ else:
                                     help="MovieLens profiles carry no like times here, so only the mood applies.")
 
             st.markdown('<div class="ctl-head">Tonight</div>', unsafe_allow_html=True)
-            mood = st.pills("In the mood for", genres, selection_mode="multi", key="mood",
-                            help="Genres you are in the mood for. They are boosted on top of your taste.")
-            mood_col, lean_col, count_col = st.columns([1.1, 1.1, 0.8])
-            strength = mood_col.segmented_control(
-                "Mood strength", ["Nudge", "Strong", "Only these"], default="Strong", key="mood_strength",
-                disabled=not mood, help="Nudge: a light boost. Strong: mood genres lead. Only these: nothing else.")
-            lean = lean_col.segmented_control(
-                f"Lean on {WEEKDAYS[weekday]} likes", list(LEAN), default="Strong", key="ctx_lean",
-                disabled=user is not None,
-                help=f"How much likes made on a {WEEKDAYS[weekday]} (and in the {DAYPARTS[part]}) count right now. "
-                     "Your preference: on MovieLens data this signal showed no measurable gain (see Project results).")
+            mood, strength_key, lean, count_col = taste_controls(genres, lean_disabled=user is not None)
             count = count_col.segmented_control("Picks", [6, 12, 18], default=12, key="pick_count") or 12
             left, right = st.columns(2)
             discover = left.toggle("Discover less popular films", disabled=user is None and not likes)
             explanations = right.toggle("Show why", value=True)
 
-        lean = lean or "Off"
         ranker = ContextRanker(LEAN[lean] if user is None else LEAN["Off"])
-        strength_key = {"Nudge": "nudge", "Strong": "strong", "Only these": "only"}.get(strength or "Strong")
         rows = recommend_in_context(bundle, tables, ranker, likes=None if user is not None else likes,
                                     user_id=user, k=count, discover=discover, weekday=weekday, part=part,
                                     mood=set(mood or []), mood_strength=strength_key)

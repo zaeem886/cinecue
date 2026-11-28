@@ -143,3 +143,55 @@ class LikesStoreTests(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+
+class TasteMatchTests(unittest.TestCase):
+    """taste_match agrees with Discover's ranking and explains its verdict."""
+
+    @classmethod
+    def setUpClass(cls):
+        ContextAdapterTests.setUpClass.__func__(cls)  # same synthetic bundle, without rerunning its tests
+
+    likes = ContextAdapterTests.likes
+
+    def test_top_pick_matches_discover_and_ranks_are_consistent(self):
+        from cinecue.demo import taste_match
+        likes = self.likes([1, 6, 11])
+        ranker = ContextRanker([1.0, 1.5, 0.5, 0.75, 0])
+        top = recommend_in_context(self.bundle, self.tables, ranker, likes=likes, k=3)
+        everything = [m for m in self.bundle[1].index if m not in (1, 6, 11)]
+        match = taste_match(self.bundle, self.tables, ranker, likes, everything)
+        self.assertEqual(match[top[0]['movie_id']]['rank'], 1)
+        self.assertEqual(match[top[0]['movie_id']]['label'], 'Top pick today')
+        ranks = sorted(m['rank'] for m in match.values() if not m['low_data'])
+        self.assertEqual(ranks[0], 1)
+        for m in match.values():
+            self.assertTrue(0 <= m['percent'] <= 100)
+            self.assertGreaterEqual(m['rank'], 1)
+
+    def test_reasons_and_mood(self):
+        from cinecue.demo import taste_match
+        likes = self.likes([0, 5])
+        match = taste_match(self.bundle, self.tables, ContextRanker(), likes, [10, 3, 0],
+                            mood={'Crime', 'Comedy'})
+        crime, comedy, liked = match[10], match[3], match[0]
+        self.assertEqual(crime['mood_match'], ['Crime'])
+        self.assertEqual(crime['mood_miss'], ['Comedy'])
+        self.assertTrue(liked['liked'])
+        for m in match.values():
+            if m['closest']:
+                self.assertIn(m['closest']['title'], {'Movie 0', 'Movie 5'})
+
+    def test_no_likes_means_no_match(self):
+        from cinecue.demo import taste_match
+        self.assertEqual(taste_match(self.bundle, self.tables, ContextRanker(), [], [1, 2]), {})
+
+    def test_day_pull_is_one_sided(self):
+        """Same-day likes can lift a movie's day features but never make them negative."""
+        mf, ease = self.bundle[2], self.bundle[3]
+        G, _, lift = self.tables
+        positions = mf.movies.encode(np.array([1, 2, 3]))
+        X = context_features(ease, mf, 0.75, positions, np.full(3, 5.0), np.array([0, 0, 2]),
+                             np.array([3, 1, 3]), 0, 3, G, lift)
+        self.assertTrue((X[:, 1:3] >= 0).all())
+        self.assertTrue((X[:, 1:3] <= 2.5).all())

@@ -143,6 +143,13 @@ the UTC and recency adjustments tested in the notebooks.
   *Lean on {weekday} likes* (Off, Light, Strong) makes likes from the current weekday and
   time of day count more. For example, a like of Inside Man on a Monday evening pulls
   crime thrillers up on later Monday evenings.
+- **Search** finds any movie by title and shows how well it fits your taste today: its rank
+  among the 20+-rating catalog for your likes, the current day and time, and your mood
+  (*Top pick today* = top 12, the size of a Discover list, down to *Not your taste today*),
+  where it usually ranks, the like that pulls it closest and the one that pushes it away,
+  and whether it fits your mood. Results can be ordered by title match or by fit today. The
+  Movie library shows the same match once you have likes. Mood and day weighting carry
+  over between Discover, Search and the library.
 - **Hover details.** Hovering over or focusing a poster lists every signal behind the pick:
   predicted stars, how many places the current context moved it, the like that
   contributed most and when that like happened, and mood matches.
@@ -156,10 +163,12 @@ on the validation period (5-fold over users). A variant is selected only if its 
 bootstrap gain over the final ranker has a 95% interval above zero. Test is then used
 once. Results are in `results/context_summary.json` and on the *Project results* page.
 
-No signal helped. Test NDCG@10 is 0.1003 for the final ranker. The best context variant
-differs by −0.0001 (95% interval −0.0014 to +0.0010). The user's weekday genres are
-reliably worse, at −0.0013 (−0.0025 to −0.0002). The validated ranker therefore uses no
-context. In the website, day weighting is a user preference, labelled as such.
+No signal helped. Test NDCG@10 is 0.1003 for the final ranker. The closest context variant,
+same-time-of-day likes, differs by −0.0001 (95% interval −0.0004 to +0.0002). Same-weekday
+likes (−0.0003, −0.0006 to −0.0000), the user's weekday genres (−0.0013, −0.0025 to −0.0002)
+and all signals together (−0.0013, −0.0023 to −0.0002) are reliably worse. The like-based
+signals are one-sided and softly capped: likes from the current day pull their neighbours up
+but never push other movies down. The validated ranker therefore uses no context. In the website, day weighting is a user preference, labelled as such.
 MovieLens timestamps are UTC rating-submission times, often from one sitting, not
 viewing times. The local likes the website now records are the data a future test needs.
 
