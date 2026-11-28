@@ -23,3 +23,6 @@ data/processed/*
 *.parquet
 
 /data/likes.json
+
+# Prisma CLI (npm install)
+node_modules/
