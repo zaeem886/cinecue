@@ -7,7 +7,7 @@ popularity exposure on MovieLens 1M.
 
 ## Run the website
 
-Install Python 3.11?3.14, clone this repository, and enter its directory.
+Install Python 3.11–3.14, clone this repository, and enter its directory.
 
 **Windows:** double-click `start-cinecue.cmd`. The launcher creates `.venv`,
 installs `requirements-app.txt`, and starts Streamlit. Internet is required for
@@ -88,8 +88,10 @@ generate a personalized list. Selecting a MovieLens profile uses that user's
 train/validation history instead. Already rated or selected titles are excluded,
 and eligible movies must have at least 20 history ratings.
 
-The displayed predicted stars come from MF. The combined ranking score determines
-list order. **Discover less popular films** applies the selected popularity penalty
+The displayed predicted stars come from MF on the whole profile. The rating-session
+adjustment from notebook 5 needs a live rating session (earlier ratings within the
+same hour), so the website's lists do not apply it. The combined ranking score
+determines list order. **Discover less popular films** applies the selected popularity penalty
 to the top candidates. Explanations name a liked movie with a positive score
 contribution when available and report shared genres. The final ranker excludes
 the UTC and recency adjustments tested in the notebooks.
@@ -100,7 +102,9 @@ the UTC and recency adjustments tested in the notebooks.
 - **Movie library** provides title/year search, genre filters, and pagination.
 - **Watchlist** saves picks during the browser session and exports them as CSV.
   Closing or resetting a session can clear the list, so export it to keep a copy.
-- **Project results** shows the included test metrics and a ranking comparison chart.
+- **Project results** shows headline test results and compares the final ranking
+  models; the recency variants evaluated in notebook 6 are not shown because CineCue
+  does not use them.
 - **Dark mode** switches the interface theme and retains the selection during navigation.
 
 The explanation toggle changes presentation only. It can support a survey
