@@ -29,7 +29,7 @@ PAGE_ICONS = {"Discover": ":material/explore:", "Search": ":material/manage_sear
 MOOD_STRENGTHS = {"Nudge": "nudge", "Strong": "strong", "Only these": "only"}
 # Widget values that should survive moving between pages (Streamlit drops the state of widgets
 # a page does not draw). restore() before the widget, keep() after it.
-REMEMBERED = {"mood": [], "mood_strength": "Strong", "ctx_lean": "Strong", "search_query": "",
+REMEMBERED = {"mood": [], "mood_strength": "Strong", "ctx_lean": "Strong", "search_query": "", "show_why": True,
               "search_order": "Best title match"}
 DAYPART_ICONS = {0: "☾", 1: "☀", 2: "◐", 3: "☾"}
 # Context weights you choose in Discover. MovieLens showed no measurable gain from any of them
@@ -523,15 +523,17 @@ html,body,[data-testid="stApp"],.stApp button,.stApp input {font-family:'Inter',
 .match-key i {width:.7rem;height:.7rem;border-radius:2px;background:var(--lv)}
 
 /* ---------- Hover details on posters ---------- */
-.poster .tip {position:absolute;inset:0;z-index:3;display:flex;flex-direction:column;gap:.35rem;overflow-y:auto;
-  scrollbar-width:none;padding:.7rem;background:rgba(14,14,14,.93);color:#f2f2f2;opacity:0;
+.poster .tip {position:absolute;inset:0;z-index:3;display:flex;flex-direction:column;gap:.25rem;overflow-y:auto;
+  scrollbar-width:none;padding:.6rem .6rem .55rem;background:rgba(14,14,14,.94);color:#f2f2f2;opacity:0;
   transition:opacity .18s ease;pointer-events:none;text-align:left}
 [class*="st-key-cuecard"]:hover .poster .tip {pointer-events:auto}
 [class*="st-key-cuecard"]:hover .poster .tip,.poster:focus-within .tip,.poster:focus .tip {opacity:1}
-.tip .tip-title {font-weight:700;font-size:.9rem;line-height:1.25;margin-top:auto}
+.tip .tip-title {font-weight:700;font-size:.84rem;line-height:1.2;margin-top:auto}
 .tip .tip-title small {font-weight:500;opacity:.65;margin-left:.3rem}
-.tip ul {list-style:none;margin:0;padding:0;display:grid;gap:.28rem}
-.tip li {display:flex;gap:.45rem;align-items:flex-start;font-size:.74rem;line-height:1.35;margin:0;color:#cfcfcf}
+.tip .tip-head {font-size:.66rem;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:#ff5a63;margin:-.1rem 0 .05rem}
+.why-hint {font-size:.84rem;color:var(--cue-muted)} .why-hint b {color:var(--cue-text)}
+.tip ul {list-style:none;margin:0;padding:0;display:grid;gap:.22rem}
+.tip li {display:flex;gap:.4rem;align-items:flex-start;font-size:.7rem;line-height:1.3;margin:0;color:#d4d4d4}
 .tip li i {font-style:normal;flex-shrink:0;width:1rem;text-align:center;color:#8c8c8c}
 .tip li.hot i {color:#46d369}
 .tip li b {color:#fff}
@@ -629,36 +631,62 @@ def because_text(movie):
     return rich, plain
 
 
-def tooltip_html(movie, name, year, genres, explanations=True):
-    """Hover/focus panel over the poster: every signal behind the card, as short text lines.
+def short_when(when):
+    """'on a Saturday evening, like now' -> 'at this same day and time': short enough for a poster."""
+    if not when:
+        return ""
+    if "like now" in when:
+        return "at this same day and time"
+    if ", also a " in when:
+        return "also on a " + when.split(", also a ")[1]
+    return when
 
-    With explanations off ("Show why"), only facts remain: predicted stars and rating counts.
-    """
-    lines = match_lines(movie["match"]) if movie.get("match") else []
-    if movie.get("prediction") is not None:
-        lines.append(("★", f"<b>{movie['prediction']:.1f}</b> stars predicted for you", False))
-    if not explanations:
-        pass
+
+def why_lines(movie):
+    """'Why it's for you': the main reason first, then at most three short supporting lines."""
+    lines = []
+    if movie.get("because"):
+        when = short_when(movie.get("because_when"))
+        lines.append(("♥", f"You liked <b>{html.escape(display_title(movie['because'])[0])}</b>"
+                           + (f" {html.escape(when)}" if when else ""), True))
+        if movie.get("shared"):
+            lines.append(("☷", f"Same genres: <b>{html.escape(', '.join(movie['shared'][:2]))}</b>", False))
+    elif movie.get("prediction") is None and movie.get("ratings"):
+        lines.append(("☰", f"A MovieLens favourite: <b>{movie['ratings']:,}</b> ratings", True))
+    elif movie.get("reason"):
+        lines.append(("◎", html.escape(movie["reason"].rstrip(".")), True))
+    if movie.get("mood_match"):
+        lines.append(("✓", f"In your mood: <b>{html.escape(', '.join(movie['mood_match']))}</b>", True))
+    if movie.get("context_tags"):
+        lines.append(("◷", "Fits your <b>" + html.escape(" & ".join(movie["context_tags"][:2])) + "</b>", True))
     elif movie.get("moved", 0) > 0 and movie.get("context"):
-        lines.append(("↑", f"Up <b>{movie['moved']}</b> place{'s' if movie['moved'] != 1 else ''} for "
-                            f"{html.escape(movie['context'])}", True))
-    if explanations and movie.get("because"):
-        lines.append(("♥", because_text(movie)[0], bool(movie.get("because_when", "")
-                                                          and "like now" in movie["because_when"])))
-    if explanations and movie.get("context_tags"):
-        lines.append(("◷", "Lifted by your <b>" + html.escape(", ".join(movie["context_tags"])) + "</b>", True))
-    if explanations and movie.get("mood_match"):
-        lines.append(("◎", f"Matches your mood: <b>{html.escape(', '.join(movie['mood_match']))}</b>", True))
-    if movie.get("ratings"):
-        lines.append(("☰", f"{movie['ratings']:,} MovieLens ratings", False))
-    if movie.get("movie_id") is not None and int(movie["movie_id"]) in liked_ids():
+        lines.append(("↑", f"Up <b>{movie['moved']}</b> place{'s' if movie['moved'] != 1 else ''} today", True))
+    if movie.get("prediction") is not None:
+        lines.append(("★", f"You'd rate it about <b>{movie['prediction']:.1f}</b>/5", False))
+    if movie.get("prediction") is None and not movie.get("because"):
+        lines.append(("♡", "Like a few movies for picks made for you", False))
+    return lines
+
+
+def tooltip_html(movie, name, year, genres, explanations=True):
+    """Hover/focus panel over the poster.
+
+    With "Show why" on it explains the pick ("Why it's for you"). Off, there is no panel,
+    except for a taste-match result (Search, library), whose fit details are the point.
+    """
+    if movie.get("match"):
+        heading, lines = "How it fits today", match_lines(movie["match"])
+    elif explanations:
+        heading, lines = "Why it's for you", why_lines(movie)
+    else:
+        return ""
+    if movie.get("movie_id") is not None and int(movie["movie_id"]) in liked_ids() and not movie.get("match"):
         lines.append(("♥", "In your likes", False))
-    if not lines:
-        lines.append(("☰", html.escape(" · ".join(genres) or "Movie"), False))
     items = "".join(f'<li class="{"hot" if hot else ""}"><i>{icon}</i><span>{text}</span></li>'
                     for icon, text, hot in lines)
     return (f'<div class="tip" role="tooltip"><div class="tip-title">{html.escape(name)}'
-            f'{f"<small>{year}</small>" if year else ""}</div><ul>{items}</ul></div>')
+            f'{f"<small>{year}</small>" if year else ""}</div><div class="tip-head">{heading}</div>'
+            f'<ul>{items}</ul></div>')
 
 
 def liked_ids():
@@ -1138,7 +1166,8 @@ else:
                               help="Every word must appear in the title, in any order. Accents and punctuation "
                                    "are ignored. Press Enter to search.")
         selected = st.pills("Genres", genres, selection_mode="multi", key="library_genres") or []
-        st.caption("Hover a poster for details. ♡ Like stamps the movie with "
+        st.caption(("Hover a poster to see how it fits your taste. " if st.session_state.likes else "")
+                   + "♡ Like stamps the movie with "
                    f"{WEEKDAYS[weekday]} {DAYPARTS[part]}.")
         records = catalog.assign(ratings=counts).rename_axis("movie_id").reset_index()[["movie_id", "title", "genres", "ratings"]]
         by_id = {int(r["movie_id"]): r for r in records.to_dict("records")}
@@ -1310,9 +1339,7 @@ else:
             st.markdown('<div class="ctl-head">Tonight</div>', unsafe_allow_html=True)
             mood, strength_key, lean, count_col = taste_controls(genres, lean_disabled=user is not None)
             count = count_col.segmented_control("Picks", [6, 12, 18], default=12, key="pick_count") or 12
-            left, right = st.columns(2)
-            discover = left.toggle("Discover less popular films", disabled=user is None and not likes)
-            explanations = right.toggle("Show why", value=True)
+            discover = st.toggle("Discover less popular films", disabled=user is None and not likes)
 
         ranker = ContextRanker(LEAN[lean] if user is None else LEAN["Off"])
         personal = user is not None or bool(likes)
@@ -1321,6 +1348,11 @@ else:
                                     user_id=user, k=count + personal, discover=discover, weekday=weekday,
                                     part=part, mood=set(mood or []), mood_strength=strength_key)
         on_day = sum(like["weekday"] == weekday for like in likes)
+        note_col, why_col = st.columns([5, 1.3], vertical_alignment="center")
+        restore("show_why")
+        explanations = why_col.toggle("Show why", key="show_why",
+                                      help="On: hover any movie to see why it is a good pick for you.")
+        keep("show_why")
         if user is None and likes:
             if lean != "Off" and on_day:
                 text = (f"<b>{on_day} of your {len(likes)} likes</b> are from {WEEKDAYS[weekday]}s, so they "
@@ -1332,17 +1364,23 @@ else:
                 text = "Day weighting is off: every like counts the same, whatever the day."
             note = ("Day weighting is your preference. On MovieLens 1M it gave no measurable gain in "
                     "top-10 accuracy.") if lean != "Off" else ""
-            st.markdown(f'<div class="ctx-banner"><span class="ctx-icon">{DAYPART_ICONS[part]}</span><div>'
-                        f'It\'s <b>{when}</b>. {text}<span class="note">{note}</span></div></div>',
-                        unsafe_allow_html=True)
+            note_col.markdown(f'<div class="ctx-banner"><span class="ctx-icon">{DAYPART_ICONS[part]}</span><div>'
+                              f'It\'s <b>{when}</b>. {text}<span class="note">{note}</span></div></div>',
+                              unsafe_allow_html=True)
+        else:
+            note_col.markdown('<div class="why-hint">Hover any movie to see why it was picked.</div>' if explanations
+                              else '<div class="why-hint">Turn on <b>Show why</b> to see why each movie was picked.</div>',
+                              unsafe_allow_html=True)
         mood_note = f" · mood: {', '.join(mood)}" if mood else ""
         if personal and rows:
             billboard(rows[0], f"Top pick for your {when}", explanations)
             basis = f"MovieLens user {user}" if user is not None else f"{len(likes)} like{'s' if len(likes) != 1 else ''}"
-            section("More picks for you", f"Based on {basis}{mood_note}" + (" · discovery on" if discover else ""))
+            section("More picks for you", f"Based on {basis}{mood_note}" + (" · discovery on" if discover else "")
+                    + (" · hover a movie to see why" if explanations else ""))
             cards(rows[1:], "recommendation", explanations, ranked=True, first_rank=2)
         else:
-            section("Popular on CineCue", "Like a movie to personalise" + mood_note)
+            section("Popular on CineCue", "Like a movie to personalise" + mood_note
+                    + (" · hover a movie to see why" if explanations else ""))
             cards(rows, "recommendation", explanations, ranked=True,
                   empty="No movies fit this mood. Try Nudge or Strong instead of Only these.")
 
