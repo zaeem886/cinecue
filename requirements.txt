@@ -1,9 +1,20 @@
-pandas==2.3.3
+# Every Python library CineCue uses: notebooks, scripts, tests and the website.
+# Install with: python -m pip install -r requirements.txt
+# (requirements-app.txt is the smaller set for running only the website.)
+
+# Data and models (notebooks, src/cinecue, scripts)
 numpy==2.3.5
+pandas==2.3.3
 matplotlib==3.10.8
+
+# Notebook execution
 nbformat==5.10.4
 nbconvert==7.16.6
 ipykernel==7.1.0
 ipython==9.18.1
 jupyterlab==4.5.0
 
+# Website (app.py) and its accounts database
+streamlit==1.67.0
+psycopg[binary]==3.3.9
+certifi==2026.11.20
