@@ -16,6 +16,7 @@ from cinecue.context import DAYPARTS, WEEKDAYS, ContextRanker, daypart  # noqa: 
 from cinecue.data import table_path  # noqa: E402
 from cinecue.demo import context_tables, fit_demo, fit_tables, recommend_in_context, taste_match  # noqa: E402
 from cinecue.first_run import official_tables  # noqa: E402
+from cinecue.hub import download_models, model_repo  # noqa: E402
 from cinecue.likes import load_likes, make_like, save_likes  # noqa: E402
 from cinecue.search import TitleSearch, display_title, label  # noqa: E402
 
@@ -708,6 +709,21 @@ processed = next((p for p in [ROOT / "results", ROOT / "data/processed"]
 large_artifact = ROOT / "artifacts/recommender-32m.pkl"  # built by scripts/build_app_catalog.py
 artifact = ROOT / "artifacts/recommender.pkl"
 
+
+@st.cache_resource(show_spinner="Downloading the CineCue models. This happens once and takes a minute or two.")
+def shared_models(repo):
+    """Fetch missing models from the team's private GitHub repository (see cinecue.hub)."""
+    try:
+        return [path.name for path in download_models(ROOT / "artifacts", repo)], None
+    except Exception as error:  # no login, no access, or offline: fall back to local models
+        return [], str(error)
+
+
+if model_repo() and not large_artifact.is_file():
+    _, download_error = shared_models(model_repo())
+    if download_error:
+        st.sidebar.warning(f"Could not download the shared models ({download_error.splitlines()[0][:160]}). "
+                           f"Run `gh auth login` or set GITHUB_TOKEN with read access to {model_repo()}.")
 active_artifact = large_artifact if large_artifact.is_file() else artifact
 posters_file = ROOT / "results/posters.csv"  # built by scripts/fetch_posters.py
 
