@@ -134,6 +134,34 @@ the UTC and recency adjustments tested in the notebooks.
   models; the recency variants evaluated in notebook 6 are not shown because CineCue
   does not use them.
 - **Dark mode** switches the interface theme and retains the selection during navigation.
+- **Likes with a moment.** ♡ Like on any card, or adding a title under *Movies you love*,
+  records the movie with the weekday and time of day (night, morning, afternoon,
+  evening). Likes are saved locally in `data/likes.json`, which Git ignores. The sidebar's
+  *Right now* card shows the current moment. Switch off *Use my clock* to pick another
+  day, and change a like's day under *When you liked them*.
+- **Tonight.** *In the mood for* boosts chosen genres (Nudge, Strong, or Only these).
+  *Lean on {weekday} likes* (Off, Light, Strong) makes likes from the current weekday and
+  time of day count more. For example, a like of Inside Man on a Monday evening pulls
+  crime thrillers up on later Monday evenings.
+- **Hover details.** Hovering over or focusing a poster lists every signal behind the pick:
+  predicted stars, how many places the current context moved it, the like that
+  contributed most and when that like happened, and mood matches.
+
+### Does the day of the week matter?
+
+`scripts/evaluate_context.py` trains a context re-ranker on MovieLens 1M. Its signals
+are likes from the same weekday or time of day, a user's genre shift on that weekday,
+and everyone's weekday genre shift. It learns the feature weights by logistic regression
+on the validation period (5-fold over users). A variant is selected only if its paired
+bootstrap gain over the final ranker has a 95% interval above zero. Test is then used
+once. Results are in `results/context_summary.json` and on the *Project results* page.
+
+No signal helped. Test NDCG@10 is 0.1003 for the final ranker. The best context variant
+differs by −0.0001 (95% interval −0.0014 to +0.0010). The user's weekday genres are
+reliably worse, at −0.0013 (−0.0025 to −0.0002). The validated ranker therefore uses no
+context. In the website, day weighting is a user preference, labelled as such.
+MovieLens timestamps are UTC rating-submission times, often from one sitting, not
+viewing times. The local likes the website now records are the data a future test needs.
 
 The explanation toggle changes presentation only. It can support a survey
 demonstration. Survey responses are not collected by the current website.
