@@ -14,6 +14,7 @@ from cinecue.artifacts import load_bundle, save_bundle  # noqa: E402
 from cinecue.data import table_path  # noqa: E402
 from cinecue.demo import fit_demo, fit_tables, recommend  # noqa: E402
 from cinecue.first_run import official_tables  # noqa: E402
+from cinecue.search import TitleSearch, display_title, label  # noqa: E402
 
 st.set_page_config(page_title="CineCue | Movie discovery", page_icon="🎬", layout="wide")
 if toast := st.session_state.pop("toast", None):
@@ -127,16 +128,18 @@ html,body,[data-testid="stApp"] {font-family:'DM Sans',sans-serif}
 .poster.has-img .fg {position:relative;height:100%;aspect-ratio:2/3;object-fit:cover;border-radius:6px;
   box-shadow:0 8px 22px rgba(0,0,0,.5)}
 .poster.has-img .year {z-index:1}
-.movie-title {font-size:1.04rem;font-weight:600;line-height:1.3;margin:.75rem 0 .35rem;min-height:2.6em;
+.movie-title {font-size:1.04rem;font-weight:600;line-height:1.3;margin:.75rem 0 .35rem;height:2.6em;
   display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
-.chips {display:flex;flex-wrap:wrap;gap:.3rem;margin-bottom:.55rem}
-.chip {font-size:.72rem;border:1px solid var(--cue-border);border-radius:999px;padding:.08rem .5rem;color:var(--cue-muted)}
-.score {display:flex;align-items:center;gap:.55rem;font-size:.85rem;color:var(--cue-muted);margin-bottom:.55rem}
+.chips {display:flex;flex-wrap:nowrap;gap:.3rem;margin-bottom:.55rem;height:1.45rem;overflow:hidden}
+.chip {font-size:.72rem;border:1px solid var(--cue-border);border-radius:999px;padding:.08rem .5rem;color:var(--cue-muted);
+  white-space:nowrap;flex-shrink:0}
+.score {display:flex;align-items:center;gap:.55rem;font-size:.85rem;color:var(--cue-muted);margin-bottom:.55rem;height:1.35rem}
 .score b {color:var(--cue-text)}
 .meter {flex:1;height:6px;border-radius:99px;background:var(--cue-bar);overflow:hidden}
 .meter i {display:block;height:100%;background:var(--cue-accent);border-radius:99px}
 .reason {background:var(--cue-accent-soft);border-radius:9px;padding:.55rem .65rem;font-size:.84rem;line-height:1.45;
-  margin-bottom:.6rem;min-height:3.4em}
+  margin-bottom:.6rem;height:5.9rem;box-sizing:border-box;overflow:hidden}
+.reason .why {display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
 .reason .label {display:block;font-size:.7rem;font-weight:600;letter-spacing:.06em;text-transform:uppercase;
   color:var(--cue-accent);margin-bottom:.15rem}
 .kpi {background:var(--cue-surface);border:1px solid var(--cue-border);border-radius:14px;padding:1rem 1.1rem;height:100%}
@@ -247,24 +250,6 @@ GENRE_COLORS = {
     "Mystery": "#304a63", "Romance": "#963d5b", "Sci-Fi": "#17616f", "Thriller": "#55392a",
     "War": "#4f5034", "Western": "#80491f", "Children": "#2f6c94", "IMAX": "#2b4a5e",
 }
-ARTICLE = re.compile(r"^(?P<name>.*), (?P<article>The|A|An|Les|La|Le|Il|L'|Das|Die|El)(?P<rest> \(.*\))?$")
-
-
-def display_title(title):
-    """'Matrix, The (1999)' -> ('The Matrix', '1999'): readable names for MovieLens titles."""
-    match = re.match(r"^(?P<base>.*?)\s*\((?P<year>\d{4})\)\s*$", str(title))
-    base, year = (match["base"], match["year"]) if match else (str(title), "")
-    moved = ARTICLE.match(base)
-    if moved:
-        base = f"{moved['article']} {moved['name']}{moved['rest'] or ''}"
-    return base, year
-
-
-def label(title):
-    name, year = display_title(title)
-    return f"{name} ({year})" if year else name
-
-
 def hero(eyebrow, title, subtitle):
     st.markdown(f'<div class="hero ph-{page_phase}"><div class="eyebrow">{eyebrow}</div><h1>{title}</h1>'
                 f'<p>{subtitle}</p></div>', unsafe_allow_html=True)
@@ -302,16 +287,20 @@ def card_html(movie, explanations, rank=None):
                      f'<span class="meter"><i style="width:{width:.0f}%"></i></span></div>')
     elif movie.get("ratings"):
         parts.append(f'<div class="score"><span><b>{movie["ratings"]:,}</b> ratings</span></div>')
+    else:
+        parts.append('<div class="score"></div>')  # keeps every card the same height
     if explanations:
         if movie.get("because"):
             shared = movie.get("shared") or []
+            plain = f"Because you liked {label(movie['because'])}" + (f" · shares {', '.join(shared)}" if shared else "")
             text = f"Because you liked <b>{html.escape(label(movie['because']))}</b>"
             if shared:
                 text += f" · shares {html.escape(', '.join(shared))}"
-            parts.append(f'<div class="reason"><span class="label">Why this pick</span>{text}.</div>')
-        elif movie.get("reason"):
-            parts.append(f'<div class="reason"><span class="label">Why this pick</span>'
-                         f'{html.escape(movie["reason"])}</div>')
+        else:
+            plain = (movie.get("reason") or "Suggested from your ratings").rstrip(".")
+            text = html.escape(plain)
+        parts.append(f'<div class="reason"><span class="label">Why this pick</span>'
+                     f'<span class="why" title="{html.escape(plain)}.">{text}.</span></div>')
     return "".join(parts)
 
 
@@ -369,6 +358,12 @@ POSTERS = load_posters(posters_file.stat().st_mtime_ns if posters_file.is_file()
 
 def poster_url(movie_id):
     return POSTERS.get(int(movie_id)) if movie_id is not None else None
+
+
+@st.cache_resource(show_spinner=False)
+def title_search(signature, _catalog):
+    """Search index for the loaded catalog; rebuilt only when the model changes."""
+    return TitleSearch(_catalog.title.to_dict())
 
 
 @st.cache_resource(show_spinner="Preparing your library. The first launch can take a few minutes.")
@@ -497,18 +492,22 @@ else:
         hero("Movie library", "Find an old favorite.",
              f"Browse {len(catalog):,} movies. Search a title, filter by genre, and save anything for later.")
         left, right = st.columns([2, 1])
-        query = left.text_input("Search movies", placeholder="Title or year, e.g. matrix or 1999")
+        query = left.text_input("Search movies", placeholder="Title, words or year, e.g. dark knight 2008",
+                                help="Every word must appear in the title, in any order. Accents and punctuation "
+                                     "are ignored. Press Enter to search.")
         selected = right.multiselect("Genres", genres)
         records = catalog.assign(ratings=counts).rename_axis("movie_id").reset_index()[["movie_id", "title", "genres", "ratings"]]
-        needle = query.strip().casefold()
-        filtered = [r for r in records.to_dict("records")
-                    if (needle in r["title"].casefold() or needle in label(r["title"]).casefold())
-                    and (not selected or set(selected).intersection(str(r["genres"]).split("|")))]
-        filtered.sort(key=lambda r: -r["ratings"])
+        by_id = {int(r["movie_id"]): r for r in records.to_dict("records")}
+        ranked, fuzzy = title_search(signature, catalog)(query, {m: r["ratings"] for m, r in by_id.items()})
+        filtered = [by_id[m] for m in ranked
+                    if not selected or set(selected).intersection(str(by_id[m]["genres"]).split("|"))]
+        if fuzzy and filtered:
+            st.caption(f"No exact match for “{query.strip()}”. Showing close titles.")
         pages = max(1, (len(filtered) + 11) // 12)
         info, pager = st.columns([3, 1])
         number = pager.number_input("Page", min_value=1, max_value=pages, value=1)
-        info.caption(f"{len(filtered):,} movies · most rated first · page {number} of {pages}")
+        order = "best matches first" if query.strip() else "most rated first"
+        info.caption(f"{len(filtered):,} movies · {order} · page {number} of {pages}")
         cards(filtered[(number - 1) * 12:number * 12], "catalog", False,
               empty="No movies match. Try a shorter search or fewer genres.")
 
