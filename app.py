@@ -1,4 +1,4 @@
-﻿"""CineCue website. Run with: python -m streamlit run app.py"""
+"""CineCue website. Run with: python -m streamlit run app.py"""
 import html
 import json
 from pathlib import Path
@@ -16,6 +16,22 @@ from cinecue.demo import fit_demo, fit_tables, recommend  # noqa: E402
 from cinecue.first_run import official_tables  # noqa: E402
 
 st.set_page_config(page_title="CineCue | Movie discovery", page_icon="🎬", layout="wide")
+if toast := st.session_state.pop("toast", None):
+    st.toast(toast[0], icon=toast[1])
+
+
+def phase(name, signature):
+    """Return 'a' or 'b', flipping whenever `signature` changes.
+
+    Streamlit reuses DOM nodes across reruns, so a CSS entrance animation plays only once.
+    Switching between two identical keyframe names makes it replay when the content changes.
+    """
+    store = st.session_state.setdefault("_phases", {})
+    last = store.get(name)
+    if last is None or last[0] != signature:
+        store[name] = (signature, "b" if last and last[1] == "a" else "a")
+    return store[name][1]
+
 
 # ---------- Sidebar ----------
 st.session_state.setdefault("watchlist", {})
@@ -27,7 +43,9 @@ with st.sidebar:
     st.divider()
     dark_mode = st.toggle("Dark mode", key="dark_mode")
     saved_count = len(st.session_state.watchlist)
-    st.caption(f"Watchlist: {saved_count} movie{'s' if saved_count != 1 else ''}")
+    st.markdown(f'<div class="badge ph-{phase("watchlist-count", saved_count)}">Watchlist'
+                f'<b>{saved_count}</b></div>', unsafe_allow_html=True)
+page_phase = phase("page", page)
 
 # ---------- Theme ----------
 palette = (
@@ -55,11 +73,15 @@ html,body,[data-testid="stApp"] {font-family:'DM Sans',sans-serif}
 [data-testid="stSidebar"] p,[data-testid="stSidebar"] label {color:var(--cue-text)}
 [data-testid="stWidgetLabel"] p {font-weight:500}
 [data-testid="stCaptionContainer"],[data-testid="stCaptionContainer"] p {color:var(--cue-muted)!important}
-[data-testid="stVerticalBlockBorderWrapper"]>div {background:var(--cue-surface);border-radius:14px}
-[data-testid="stVerticalBlockBorderWrapper"] {border-color:var(--cue-border)!important;border-radius:14px}
+/* Bordered containers are keyed (cuecard-*, controls) so they can be styled; Streamlit 1.67 has no wrapper test id. */
+[class*="st-key-cuecard"],.st-key-controls {background:var(--cue-surface);border-color:var(--cue-border)!important;border-radius:14px}
 .stButton button,.stDownloadButton button,.stLinkButton a {border-radius:8px;background:var(--cue-surface);
-  color:var(--cue-text);border-color:var(--cue-border);font-weight:500}
+  color:var(--cue-text);border-color:var(--cue-border);font-weight:500;
+  transition:transform .15s ease,background-color .2s ease,border-color .2s ease,color .2s ease}
 .stButton button:hover,.stDownloadButton button:hover,.stLinkButton a:hover {border-color:var(--cue-accent);color:var(--cue-accent)}
+.stButton button:active,.stDownloadButton button:active,.stLinkButton a:active {transform:scale(.97)}
+[class*="-btn-on-"] button {background:var(--cue-accent-soft);border-color:var(--cue-accent);color:var(--cue-accent)}
+[data-testid="stToast"] {background:var(--cue-surface);color:var(--cue-text);border:1px solid var(--cue-border)}
 [data-baseweb="select"]>div,[data-baseweb="input"],[data-baseweb="base-input"],.stApp input,
 [data-baseweb="popover"],[role="listbox"],[role="option"] {background:var(--cue-control)!important;color:var(--cue-text)!important}
 [data-baseweb="select"] span,[data-baseweb="select"] input {color:var(--cue-text)!important}
@@ -93,12 +115,18 @@ html,body,[data-testid="stApp"] {font-family:'DM Sans',sans-serif}
 .section h3 {font-size:1.25rem;font-weight:700;margin:0;padding:0}
 .section span {color:var(--cue-muted);font-size:.88rem}
 
-.poster {height:118px;border-radius:10px;position:relative;overflow:hidden;display:flex;align-items:flex-end;
+.poster {height:230px;border-radius:10px;position:relative;overflow:hidden;display:flex;align-items:flex-end;
   padding:.7rem .8rem;color:#fff}
-.poster .mark {position:absolute;right:.55rem;top:.1rem;font-size:3.6rem;font-weight:700;opacity:.18;letter-spacing:-.05em}
+.poster .mark {position:absolute;right:.6rem;top:.2rem;font-size:5.2rem;font-weight:700;opacity:.18;letter-spacing:-.05em}
 .poster .genre {font-size:.72rem;font-weight:600;letter-spacing:.08em;text-transform:uppercase;opacity:.92}
 .poster .year {position:absolute;left:.7rem;top:.65rem;background:rgba(0,0,0,.32);border-radius:6px;padding:.1rem .45rem;
   font-size:.75rem;font-weight:600}
+.poster.has-img {align-items:center;justify-content:center;padding:.8rem;background:#0b1114}
+.poster.has-img .bg {position:absolute;inset:0;width:100%;height:100%;object-fit:cover;
+  filter:blur(16px) brightness(.5) saturate(1.2);transform:scale(1.15)}
+.poster.has-img .fg {position:relative;height:100%;aspect-ratio:2/3;object-fit:cover;border-radius:6px;
+  box-shadow:0 8px 22px rgba(0,0,0,.5)}
+.poster.has-img .year {z-index:1}
 .movie-title {font-size:1.04rem;font-weight:600;line-height:1.3;margin:.75rem 0 .35rem;min-height:2.6em;
   display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
 .chips {display:flex;flex-wrap:wrap;gap:.3rem;margin-bottom:.55rem}
@@ -134,7 +162,81 @@ html,body,[data-testid="stApp"] {font-family:'DM Sans',sans-serif}
 .bar-track i {display:block;height:100%;background:var(--cue-accent);border-radius:99px}
 .bar-row .num {text-align:right;font-variant-numeric:tabular-nums;font-weight:600}
 .footer {border-top:1px solid var(--cue-border);margin-top:3rem;padding-top:1rem;color:var(--cue-muted);font-size:.85rem}
+.badge {display:inline-flex;align-items:center;gap:.5rem;font-size:.85rem;color:var(--cue-muted)}
+.badge b {min-width:1.6rem;padding:.05rem .45rem;border-radius:999px;background:var(--cue-accent-soft);
+  color:var(--cue-accent);text-align:center;font-variant-numeric:tabular-nums}
+.poster .rank {position:absolute;right:.7rem;bottom:.6rem;z-index:1;background:rgba(0,0,0,.4);border-radius:6px;
+  padding:.1rem .45rem;font-size:.75rem;font-weight:700;font-variant-numeric:tabular-nums}
+.poster.has-img .rank {bottom:.65rem}
 @media(max-width:640px){.hero h1{font-size:1.8rem}.kpi .value{font-size:1.6rem}}
+
+/* ---------- Motion ----------
+   Each entrance keyframe exists twice (-a/-b). phase() in Python flips the class between them when
+   the content changes, which restarts the animation on DOM nodes Streamlit reuses. Fill mode is
+   `backwards` so a finished animation stops holding `transform`, and hover transforms still work. */
+@keyframes cue-rise-a {from {opacity:0;transform:translateY(14px)} to {opacity:1;transform:none}}
+@keyframes cue-rise-b {from {opacity:0;transform:translateY(14px)} to {opacity:1;transform:none}}
+@keyframes cue-grow-a {from {transform:scaleX(0)} to {transform:scaleX(1)}}
+@keyframes cue-grow-b {from {transform:scaleX(0)} to {transform:scaleX(1)}}
+@keyframes cue-pop-a {0% {transform:scale(1)} 40% {transform:scale(1.3)} 100% {transform:scale(1)}}
+@keyframes cue-pop-b {0% {transform:scale(1)} 40% {transform:scale(1.3)} 100% {transform:scale(1)}}
+@keyframes cue-pulse {0%,100% {box-shadow:0 0 0 0 var(--cue-accent)} 60% {box-shadow:0 0 0 .4rem transparent}}
+@keyframes cue-sheen {from {transform:translateX(-130%) skewX(-18deg)} to {transform:translateX(330%) skewX(-18deg)}}
+.ph-a,[class*="st-key-cuecard-a-"] {--rise:cue-rise-a;--grow:cue-grow-a;--pop:cue-pop-a}
+.ph-b,[class*="st-key-cuecard-b-"] {--rise:cue-rise-b;--grow:cue-grow-b;--pop:cue-pop-b}
+:root {--ease-out:cubic-bezier(.2,.7,.2,1)}
+
+/* Smooth light/dark switch */
+.stApp,[data-testid="stSidebar"],[data-testid="stHeader"],.stat,.kpi,.chip,.tbl-wrap {
+  transition:background-color .35s ease,border-color .35s ease,color .35s ease}
+
+/* Page header, stat pills, KPI tiles */
+.hero > * {animation:var(--rise) .6s var(--ease-out) backwards}
+.hero > :nth-child(2) {animation-delay:.07s}
+.hero > :nth-child(3) {animation-delay:.14s}
+.eyebrow::before {content:"";display:inline-block;width:.42rem;height:.42rem;margin-right:.5rem;border-radius:50%;
+  background:var(--cue-accent);vertical-align:.12em;animation:cue-pulse 2.6s ease-out infinite}
+.stats .stat {animation:var(--rise) .5s var(--ease-out) backwards;animation-delay:calc(.2s + var(--i,0) * 60ms)}
+.stats .stat:nth-child(2) {--i:1} .stats .stat:nth-child(3) {--i:2}
+.stats .stat:nth-child(4) {--i:3} .stats .stat:nth-child(5) {--i:4}
+.stColumn:nth-child(2) {--col:1} .stColumn:nth-child(3) {--col:2} .stColumn:nth-child(4) {--col:3}
+.kpi {animation:var(--rise) .55s var(--ease-out) backwards;animation-delay:calc(.15s + var(--col,0) * 80ms);
+  transition:transform .25s var(--ease-out),border-color .25s ease,background-color .35s ease}
+.kpi:hover {transform:translateY(-3px);border-color:var(--cue-accent)}
+.badge b {display:inline-block;animation:var(--pop) .45s var(--ease-out)}
+
+/* Movie cards: staggered by row and column, lift on hover */
+[class*="st-key-cuecard"] {animation:var(--rise) .55s var(--ease-out) backwards;
+  animation-delay:calc(var(--row,0) * 90ms + var(--col,0) * 60ms);
+  transition:transform .28s var(--ease-out),box-shadow .28s ease,border-color .28s ease,background-color .35s ease}
+[class*="st-key-cuecard"][class*="-row1-"] {--row:1} [class*="st-key-cuecard"][class*="-row2-"] {--row:2}
+[class*="st-key-cuecard"][class*="-row3-"] {--row:3} [class*="st-key-cuecard"][class*="-row4-"] {--row:4}
+[class*="st-key-cuecard"][class*="-row5-"] {--row:5}
+[class*="st-key-cuecard"]:hover {transform:translateY(-4px);border-color:var(--cue-accent)!important;
+  box-shadow:0 18px 34px -20px rgba(0,0,0,.45)}
+.poster::after {content:"";position:absolute;top:0;bottom:0;left:0;width:35%;pointer-events:none;
+  background:linear-gradient(90deg,transparent,rgba(255,255,255,.22),transparent);transform:translateX(-130%) skewX(-18deg)}
+[class*="st-key-cuecard"]:hover .poster::after {animation:cue-sheen .85s ease-out}
+.poster .mark,.poster.has-img .fg {transition:transform .45s var(--ease-out),opacity .45s ease}
+[class*="st-key-cuecard"]:hover .poster .mark {transform:scale(1.12) rotate(-4deg);opacity:.28}
+[class*="st-key-cuecard"]:hover .poster.has-img .fg {transform:scale(1.04)}
+.meter i {transform-origin:left;animation:var(--grow) .9s var(--ease-out) backwards;
+  animation-delay:calc(.3s + var(--row,0) * 90ms + var(--col,0) * 60ms)}
+.reason {animation:var(--rise) .5s var(--ease-out) backwards;
+  animation-delay:calc(.25s + var(--row,0) * 90ms + var(--col,0) * 60ms)}
+
+/* Results table and bar chart */
+.tbl tbody tr {animation:var(--rise) .45s var(--ease-out) backwards;animation-delay:calc(.2s + var(--i,0) * 60ms)}
+.tbl tbody tr {transition:background-color .2s ease}
+.tbl tbody tr:not(.final):hover {background:var(--cue-control)}
+.bar-track i {transform-origin:left;animation:var(--grow) 1s var(--ease-out) backwards;
+  animation-delay:calc(.2s + var(--i,0) * 90ms)}
+[data-testid="stSidebar"] [role="radiogroup"] label {transition:background-color .2s ease}
+[data-testid="stSidebar"] [role="radiogroup"] label:hover {background:var(--cue-control)}
+
+@media (prefers-reduced-motion: reduce) {
+  *,*::before,*::after {animation:none!important;transition:none!important}
+}
 </style>""", unsafe_allow_html=True)
 
 # Poster colours per primary genre; all dark enough for white text.
@@ -143,7 +245,7 @@ GENRE_COLORS = {
     "Comedy": "#8f6a12", "Crime": "#3d3f66", "Documentary": "#4c5f32", "Drama": "#5d3b78",
     "Fantasy": "#3e4f86", "Film-Noir": "#2f3438", "Horror": "#6b1d2b", "Musical": "#82386a",
     "Mystery": "#304a63", "Romance": "#963d5b", "Sci-Fi": "#17616f", "Thriller": "#55392a",
-    "War": "#4f5034", "Western": "#80491f",
+    "War": "#4f5034", "Western": "#80491f", "Children": "#2f6c94", "IMAX": "#2b4a5e",
 }
 ARTICLE = re.compile(r"^(?P<name>.*), (?P<article>The|A|An|Les|La|Le|Il|L'|Das|Die|El)(?P<rest> \(.*\))?$")
 
@@ -164,7 +266,7 @@ def label(title):
 
 
 def hero(eyebrow, title, subtitle):
-    st.markdown(f'<div class="hero"><div class="eyebrow">{eyebrow}</div><h1>{title}</h1>'
+    st.markdown(f'<div class="hero ph-{page_phase}"><div class="eyebrow">{eyebrow}</div><h1>{title}</h1>'
                 f'<p>{subtitle}</p></div>', unsafe_allow_html=True)
 
 
@@ -173,18 +275,24 @@ def section(title, note=""):
                 unsafe_allow_html=True)
 
 
-def card_html(movie, explanations):
+def card_html(movie, explanations, rank=None):
     name, year = display_title(movie["title"])
     genres = [g for g in str(movie["genres"]).split("|") if g]
     color = GENRE_COLORS.get(genres[0] if genres else "", "#34444f")
     second = GENRE_COLORS.get(genres[1], "#0b1114") if len(genres) > 1 else "#0b1114"
     initials = "".join(word[0] for word in re.findall(r"[A-Za-z0-9]+", name)[:2]).upper() or "C"
+    badge = (f'<span class="year">{year}</span>' if year else "") + \
+        (f'<span class="rank" title="Rank in this list">#{rank}</span>' if rank else "")
+    url = poster_url(movie.get("movie_id"))
+    if url:
+        poster = (f'<div class="poster has-img">{badge}<img class="bg" src="{url}" alt="" aria-hidden="true" '
+                  f'loading="lazy"><img class="fg" src="{url}" alt="Poster: {html.escape(name)}" loading="lazy"></div>')
+    else:
+        poster = (f'<div class="poster" aria-hidden="true" style="background:linear-gradient(140deg,{color} 10%,'
+                  f'{second} 115%)">{badge}<span class="mark">{html.escape(initials)}</span>'
+                  f'<span class="genre">{html.escape(genres[0] if genres else "Movie")}</span></div>')
     parts = [
-        f'<div class="poster" aria-hidden="true" style="background:linear-gradient(140deg,{color} 10%,'
-        f'{second} 115%)">'
-        + (f'<span class="year">{year}</span>' if year else "")
-        + f'<span class="mark">{html.escape(initials)}</span>'
-        f'<span class="genre">{html.escape(genres[0] if genres else "Movie")}</span></div>',
+        poster,
         f'<div class="movie-title" title="{html.escape(name)}">{html.escape(name)}</div>',
         '<div class="chips">' + "".join(f'<span class="chip">{html.escape(g)}</span>' for g in genres[:4]) + "</div>",
     ]
@@ -207,22 +315,31 @@ def card_html(movie, explanations):
     return "".join(parts)
 
 
-def cards(rows, prefix, explanations=True, empty="No movies here yet. Try another filter or save a movie from Discover."):
+def cards(rows, prefix, explanations=True, ranked=False,
+          empty="No movies here yet. Try another filter or save a movie from Discover."):
     if not rows:
         st.info(empty)
         return
+    keys = [str(movie.get("movie_id", movie["title"])) for movie in rows]
+    # New list -> new phase -> the cards animate in again. Saving a movie keeps the list, so no replay.
+    card_phase = phase(f"cards-{prefix}", tuple(keys))
     for start in range(0, len(rows), 3):
-        for column, movie in zip(st.columns(3, gap="medium"), rows[start:start + 3]):
-            with column, st.container(border=True):
-                st.markdown(card_html(movie, explanations), unsafe_allow_html=True)
-                key = str(movie.get("movie_id", movie["title"]))
+        row = min(start // 3, 5)  # the CSS stagger stops growing after the sixth row
+        for offset, (column, movie) in enumerate(zip(st.columns(3, gap="medium"), rows[start:start + 3])):
+            key = keys[start + offset]
+            with column, st.container(border=True, key=f"cuecard-{card_phase}-{prefix}-row{row}-{key}"):
+                rank = start + offset + 1 if ranked else None
+                st.markdown(card_html(movie, explanations, rank), unsafe_allow_html=True)
                 saved = key in st.session_state.watchlist
                 if st.button("✓ Saved — remove" if saved else "＋ Save to watchlist",
-                             key=f"{prefix}-{key}", width="stretch"):
+                             key=f"{prefix}-btn-{'on' if saved else 'off'}-{key}", width="stretch"):
+                    name = label(movie["title"])
                     if saved:
                         del st.session_state.watchlist[key]
+                        st.session_state.toast = (f"Removed {name} from your watchlist", ":material/bookmark_remove:")
                     else:
                         st.session_state.watchlist[key] = movie
+                        st.session_state.toast = (f"Saved {name} to your watchlist", ":material/bookmark_added:")
                     st.rerun()
 
 
@@ -231,13 +348,33 @@ required = ["train.csv", "validation.csv", "movies_clean.csv", "movie_features.c
             "rating_summary.json", "ranking_summary.json"]
 processed = next((p for p in [ROOT / "results", ROOT / "data/processed"]
                   if all(table_path(p, n).is_file() for n in required)), None)
+large_artifact = ROOT / "artifacts/recommender-32m.pkl"  # built by scripts/build_app_catalog.py
 artifact = ROOT / "artifacts/recommender.pkl"
+active_artifact = large_artifact if large_artifact.is_file() else artifact
+posters_file = ROOT / "results/posters.csv"  # built by scripts/fetch_posters.py
+
+
+@st.cache_data
+def load_posters(signature):
+    if not posters_file.is_file():
+        return {}
+    frame = pd.read_csv(posters_file, usecols=["movie_id", "poster_url"])
+    # Only Wikimedia image URLs are rendered; anything else falls back to the genre tile.
+    frame = frame.loc[frame.poster_url.str.match(r"^https://(upload|thumb)\.wikimedia\.org/")]
+    return {int(m): html.escape(u, quote=True) for m, u in zip(frame.movie_id, frame.poster_url)}
+
+
+POSTERS = load_posters(posters_file.stat().st_mtime_ns if posters_file.is_file() else 0)
+
+
+def poster_url(movie_id):
+    return POSTERS.get(int(movie_id)) if movie_id is not None else None
 
 
 @st.cache_resource(show_spinner="Preparing your library. The first launch can take a few minutes.")
 def models(signature):
-    if artifact.is_file():
-        return load_bundle(artifact)
+    if active_artifact.is_file():
+        return load_bundle(active_artifact)
     if processed is None:
         history, catalog = official_tables(ROOT / "data/raw")
         bundle = fit_tables(history, catalog, dict(factors=64, reg=0.08, n_iter=10, seed=0),
@@ -287,7 +424,7 @@ elif page == "Project results":
             tiles.append(("Honest explanations", f"{named['share_left_top10']:.0%}",
                           f"of picks drop out when the named movie is removed, vs <b>{control['share_left_top10']:.0%}</b> at random"))
         for column, (name, value, note) in zip(st.columns(len(tiles), gap="small"), tiles):
-            column.markdown(f'<div class="kpi"><div class="name">{name}</div><div class="value">{value}</div>'
+            column.markdown(f'<div class="kpi ph-{page_phase}"><div class="name">{name}</div><div class="value">{value}</div>'
                             f'<div class="note">{note}</div></div>', unsafe_allow_html=True)
         section("Top-10 ranking on the test period", f"{int(test['blend']['users']):,} users known at the cutoff")
         final = {"popularity": "Most popular", "MF": "Predicted stars (MF)", "EASE": "EASE",
@@ -300,14 +437,14 @@ elif page == "Project results":
                    "Catalog coverage": "{:.1%}", "Long-tail share": "{:.1%}"}
         header = "".join(f"<th>{html.escape(c)}</th>" for c in shown.columns)
         body = "".join(
-            f'<tr class="{"final" if name == "CineCue blend" else ""}"><th scope="row">{html.escape(name)}</th>'
+            f'<tr class="{"final" if name == "CineCue blend" else ""}" style="--i:{i}"><th scope="row">{html.escape(name)}</th>'
             + "".join(f"<td>{formats[c].format(row[c])}</td>" for c in shown.columns) + "</tr>"
-            for name, row in shown.iterrows())
-        st.markdown(f'<div class="tbl-wrap"><table class="tbl"><thead><tr><th>Model</th>{header}</tr></thead>'
+            for i, (name, row) in enumerate(shown.iterrows()))
+        st.markdown(f'<div class="tbl-wrap ph-{page_phase}"><table class="tbl"><thead><tr><th>Model</th>{header}</tr></thead>'
                     f"<tbody>{body}</tbody></table></div>", unsafe_allow_html=True)
         ndcg = shown["NDCG@10"].sort_values(ascending=False)
-        st.markdown('<div class="bars" role="img" aria-label="NDCG@10 by model">' + "".join(
-            f'<div class="bar-row"><span class="name{" best" if i == 0 else ""}">{html.escape(name)}</span>'
+        st.markdown(f'<div class="bars ph-{page_phase}" role="img" aria-label="NDCG@10 by model">' + "".join(
+            f'<div class="bar-row" style="--i:{i}"><span class="name{" best" if i == 0 else ""}">{html.escape(name)}</span>'
             f'<span class="bar-track"><i style="width:{value / ndcg.max() * 100:.1f}%"></i></span>'
             f'<span class="num">{value:.3f}</span></div>' for i, (name, value) in enumerate(ndcg.items())) + "</div>",
             unsafe_allow_html=True)
@@ -315,6 +452,17 @@ elif page == "Project results":
                    "evaluated in notebook 6 and are not part of CineCue.")
     else:
         st.info("Evaluation summaries appear here when notebook results are available.")
+    app_summary = summary("app_catalog_summary.json")
+    if app_summary and large_artifact.is_file():
+        facts, held = app_summary["catalog"], app_summary["holdout"]
+        section("The website's catalog", f"{facts['dataset']}, a laptop-sized slice")
+        st.write(f"The research results above use MovieLens 1M (films up to 2000). The website serves a newer, larger "
+                 f"catalog: the {facts['movies']:,} most-rated films of MovieLens 32M ({facts['first_year']}–"
+                 f"{facts['last_year']}), learned from {facts['ratings']:,} ratings by {facts['users']:,} sampled users. "
+                 f"The same pipeline was re-tuned on each user's last {held['ratings_per_user']} ratings: NDCG@10 "
+                 f"**{held['selected']['ndcg']:.3f}** against {held['popularity_ndcg']:.3f} for popularity "
+                 f"({held['tuning_users']:,} users), with EASE penalty {held['selected']['ease_reg']:,} and blend "
+                 f"weight {held['selected']['alpha']}. This is a sanity check, not a second study.")
     section("How your list is made")
     st.write("**EASE** learns which movies appear together in rating histories. **Matrix factorization** "
              "learns patterns in star ratings. CineCue blends both scores, skips movies you already rated "
@@ -326,8 +474,8 @@ elif page == "Project results":
     st.link_button("View source and notebooks", "https://github.com/zaeem886/cinecue")
 
 else:
-    if artifact.is_file():
-        signature = ("saved-model", artifact.stat().st_mtime_ns)
+    if active_artifact.is_file():
+        signature = ("saved-model", str(active_artifact), active_artifact.stat().st_mtime_ns)
     else:
         signature = ((str(processed), tuple(table_path(processed, n).stat().st_mtime_ns for n in required))
                      if processed else "ml-1m")
@@ -338,7 +486,10 @@ else:
         if st.button("Try again"):
             st.rerun()
         st.stop()
-    history, catalog, counts = bundle[0], bundle[1], bundle[4]
+    history, catalog, counts, settings = bundle[0], bundle[1], bundle[4], bundle[5]
+    years = pd.to_numeric(catalog.title.str.extract(r"\((\d{4})\)\s*$", expand=False), errors="coerce")
+    dataset = settings.get("dataset", "MovieLens 1M")
+    st.sidebar.caption(f"Catalog: {dataset} · {len(catalog):,} movies · {int(years.min())}–{int(years.max())}")
     titles = catalog.title.to_dict()
     genres = sorted({g for value in catalog.genres for g in str(value).split("|")})
 
@@ -364,11 +515,13 @@ else:
     else:
         hero("Discover", "Find your next movie.",
              "Pick a few movies you love, or start from a MovieLens profile. Every pick comes with the reason it was chosen.")
-        st.markdown(f'<div class="stats"><span class="stat"><b>{len(catalog):,}</b> movies</span>'
+        st.markdown(f'<div class="stats ph-{page_phase}"><span class="stat"><b>{len(catalog):,}</b> movies</span>'
                     f'<span class="stat"><b>{history.user_id.nunique():,}</b> MovieLens profiles</span>'
-                    f'<span class="stat"><b>{len(history):,}</b> ratings learned from</span></div>',
+                    f'<span class="stat"><b>{len(history):,}</b> ratings learned from</span>'
+                    f'<span class="stat">Films from <b>{int(years.min())}</b> to <b>{int(years.max())}</b></span>'
+                    f'<span class="stat"><b>{sum(poster_url(m) is not None for m in catalog.index):,}</b> posters</span></div>',
                     unsafe_allow_html=True)
-        with st.container(border=True):
+        with st.container(border=True, key="controls"):
             mode = st.radio("Start from", ["My favorites", "MovieLens profile"], horizontal=True)
             liked, user = None, None
             if mode == "My favorites":
@@ -389,7 +542,7 @@ else:
             section("Picked for you", f"Based on {basis}" + (" · discovery on" if discover else ""))
         else:
             section("Popular in the community", "Add a favorite to personalise")
-        cards(rows, "recommendation", explanations)
+        cards(rows, "recommendation", explanations, ranked=True)
 
 st.markdown('<div class="footer">CineCue · Movie discovery, with a reason · Data: MovieLens 1M, GroupLens Research '
-            '(Harper &amp; Konstan, 2015)</div>', unsafe_allow_html=True)
+            '(Harper &amp; Konstan, 2015) · Posters: Wikipedia</div>', unsafe_allow_html=True)
